@@ -262,54 +262,54 @@ yt-dlp "https://..." -o "filename.mp4"
   const QUALITY      = 0.82;  // PDF JPEG quality (0.0~1.0)
   const SCROLL_DELAY = 200;   // ms between scroll steps
 
-  // ── Video Stream Interceptor (yt-dlp style) ─────────────────────
-  // Hook XHR and fetch IMMEDIATELY to catch video URLs as they load
+  // ── Video Stream Interceptor (Google Drive only) ────────────────
+  // Skip hooks on YouTube — we use ytInitialPlayerResponse instead
   const capturedVideoURLs = new Set();
 
-  const VIDEO_PATTERNS = [
-    /googlevideo\.com/,
-    /\.m3u8/,
-    /\.mpd/,
-    /videoplayback/,
-    /mime=video/,
-    /itag=\d+/,
-  ];
+  if (!/youtube\.com|youtu\.be/i.test(window.location.href)) {
+    const VIDEO_PATTERNS = [
+      /googlevideo\.com/,
+      /\.m3u8/,
+      /\.mpd/,
+      /videoplayback/,
+      /mime=video/,
+      /itag=\d+/,
+    ];
 
-  const isVideoURL = (url) => VIDEO_PATTERNS.some(p => p.test(url));
+    const isVideoURL = (url) => VIDEO_PATTERNS.some(p => p.test(url));
 
-  const recordURL = (url) => {
-    if (!url || typeof url !== 'string') return;
-    if (isVideoURL(url)) {
-      if (!capturedVideoURLs.has(url)) {
+    const recordURL = (url) => {
+      if (!url || typeof url !== 'string') return;
+      if (isVideoURL(url) && !capturedVideoURLs.has(url)) {
         capturedVideoURLs.add(url);
         console.log('🎯 Captured video URL: ' + url.substring(0, 80) + '...');
       }
-    }
-  };
-
-  // Hook XMLHttpRequest
-  const OrigXHR = window.XMLHttpRequest;
-  function HookedXHR() {
-    const xhr = new OrigXHR();
-    const origOpen = xhr.open.bind(xhr);
-    xhr.open = function (method, url, ...args) {
-      recordURL(url);
-      return origOpen(method, url, ...args);
     };
-    return xhr;
+
+    const OrigXHR = window.XMLHttpRequest;
+    function HookedXHR() {
+      const xhr = new OrigXHR();
+      const origOpen = xhr.open.bind(xhr);
+      xhr.open = function (method, url, ...args) {
+        recordURL(url);
+        return origOpen(method, url, ...args);
+      };
+      return xhr;
+    }
+    HookedXHR.prototype = OrigXHR.prototype;
+    window.XMLHttpRequest = HookedXHR;
+
+    const origFetch = window.fetch;
+    window.fetch = function (input, ...args) {
+      const url = typeof input === 'string' ? input : input?.url;
+      recordURL(url);
+      return origFetch.apply(this, [input, ...args]);
+    };
+
+    console.log('🪝 XHR/fetch hooks installed for Drive video detection');
+  } else {
+    console.log('📺 YouTube page — skipping XHR hooks, using ytInitialPlayerResponse instead');
   }
-  HookedXHR.prototype = OrigXHR.prototype;
-  window.XMLHttpRequest = HookedXHR;
-
-  // Hook fetch
-  const origFetch = window.fetch;
-  window.fetch = function (input, ...args) {
-    const url = typeof input === 'string' ? input : input?.url;
-    recordURL(url);
-    return origFetch.apply(this, [input, ...args]);
-  };
-
-  console.log('🪝 XHR/fetch hooks installed — waiting for video requests...');
 
   // ── Utilities ───────────────────────────────────────────────────
 

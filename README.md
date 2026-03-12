@@ -40,16 +40,45 @@ A browser Console script that auto-detects Google Drive file types and applies t
 
 Open the file preview in Google Drive, open Console, paste and run. It auto-detects the type.
 
-### File Size Tips
+### Quality vs File Size Control
 
-| Setting | File Size | Quality |
-|---------|-----------|---------|
-| `SCALE = 1.0` (recommended) | Smallest — matches screen resolution | Good |
-| `SCALE = 1.5` | Medium | High |
-| `SCALE = 2.0` | Largest — full retina resolution | Best |
-| `QUALITY = 0.95` | Larger | Near-lossless |
-| `QUALITY = 0.82` | Balanced (default) | High |
-| `QUALITY = 0.70` | Smallest | Acceptable |
+There are **two ways** to control output quality — use them independently or combine them:
+
+#### Method A — Browser Zoom (no code change needed)
+> Tip from [zeltox](https://github.com/zeltox/Google-Drive-PDF-Downloader)
+
+Before running the script, zoom your browser in or out using `Ctrl +` / `Ctrl -`.
+Since the script captures images at **screen display size**, browser zoom directly controls resolution:
+
+| Browser Zoom | Effect |
+|-------------|--------|
+| 75% | Smaller file, lower quality |
+| 100% | Default balanced |
+| 150% | Higher quality, larger file |
+| 200% | Best quality, largest file (may slow down) |
+
+> ⚠️ Do not exceed 150% when using `SCALE > 1.0` in script settings — combined scaling can cause memory issues on large PDFs.
+
+#### Method B — Script Settings
+Adjust these values at the top of the script before running:
+
+| Setting | Value | Effect |
+|---------|-------|--------|
+| `SCALE` | `1.0` | Capture at screen size (smallest file) ← recommended |
+| `SCALE` | `1.5` | 1.5× screen size |
+| `SCALE` | `2.0` | Full retina resolution (largest file) |
+| `QUALITY` | `0.95` | Near-lossless JPEG |
+| `QUALITY` | `0.82` | Balanced ← default |
+| `QUALITY` | `0.70` | Smaller file, slightly lower quality |
+
+#### Recommended Combinations
+
+| Goal | Browser Zoom | SCALE | QUALITY |
+|------|-------------|-------|---------|
+| Smallest file | 75% | 1.0 | 0.70 |
+| Balanced (default) | 100% | 1.0 | 0.82 |
+| High quality | 150% | 1.0 | 0.90 |
+| Maximum quality | 150% | 1.5 | 0.95 |
 
 ### Limitations
 
@@ -58,8 +87,13 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
 | Owner disabled downloads (Docs/Sheets/Slides) | Export API blocked by Google |
 | DRM-protected video | Script opens source URL; manual save required |
 
+### Dependencies
+
+View-Only PDF mode dynamically loads [jsPDF](https://github.com/parallax/jsPDF) via unpkg. All other strategies require no external dependencies.
+
 ### Credits
 
+- [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — auto-scroll & browser zoom quality tip
 - [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob image capture method
 - [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — display-size rendering & file size optimization
 
@@ -95,22 +129,51 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
 2. 點右上角三點選單 → **「在新視窗開啟」**
 3. 按 `F12` 開啟 Console
 4. 若 Chrome 提示無法貼上，先輸入 `allow pasting` 按 Enter
-5. 貼上腳本按 **Enter**，腳本會自動捲動並下載，無需手動捲到底
+5. 貼上腳本按 **Enter**，腳本會自動捲動並下載
 
 **其他格式**
 
 直接在 Google Drive 預覽頁面開啟 Console 執行，腳本自動偵測類型。
 
-### 檔案大小調整
+### 品質與檔案大小控制
 
-| 設定 | 檔案大小 | 品質 |
-|------|---------|------|
-| `SCALE = 1.0`（推薦） | 最小，符合螢幕解析度 | 良好 |
-| `SCALE = 1.5` | 中等 | 高 |
-| `SCALE = 2.0` | 最大，完整 retina 解析度 | 最佳 |
-| `QUALITY = 0.95` | 較大 | 接近無損 |
-| `QUALITY = 0.82` | 平衡（預設） | 高 |
-| `QUALITY = 0.70` | 最小 | 尚可 |
+有**兩種方式**可以控制輸出品質，可單獨使用或組合搭配：
+
+#### 方式 A — 瀏覽器縮放（不需改程式碼）
+> 技巧來源：[zeltox](https://github.com/zeltox/Google-Drive-PDF-Downloader)
+
+執行腳本前，用 `Ctrl +` / `Ctrl -` 調整瀏覽器縮放比例。
+因為腳本以**螢幕顯示尺寸**擷取圖片，瀏覽器縮放可直接控制解析度：
+
+| 瀏覽器縮放 | 效果 |
+|-----------|------|
+| 75% | 檔案較小，品質較低 |
+| 100% | 預設平衡 |
+| 150% | 品質較高，檔案較大 |
+| 200% | 最高品質，檔案最大（大型 PDF 可能變慢） |
+
+> ⚠️ 若腳本的 `SCALE > 1.0`，瀏覽器縮放建議不超過 150%，兩者疊加可能造成記憶體問題。
+
+#### 方式 B — 腳本參數
+在執行前調整腳本頂部的設定值：
+
+| 參數 | 值 | 效果 |
+|------|---|------|
+| `SCALE` | `1.0` | 以螢幕尺寸擷取（最小檔案）← 推薦 |
+| `SCALE` | `1.5` | 1.5 倍螢幕尺寸 |
+| `SCALE` | `2.0` | 完整 retina 解析度（最大檔案） |
+| `QUALITY` | `0.95` | 接近無損 JPEG |
+| `QUALITY` | `0.82` | 平衡 ← 預設 |
+| `QUALITY` | `0.70` | 較小檔案，品質略降 |
+
+#### 推薦組合
+
+| 目標 | 瀏覽器縮放 | SCALE | QUALITY |
+|------|-----------|-------|---------|
+| 最小檔案 | 75% | 1.0 | 0.70 |
+| 平衡（預設） | 100% | 1.0 | 0.82 |
+| 高品質 | 150% | 1.0 | 0.90 |
+| 最高品質 | 150% | 1.5 | 0.95 |
 
 ### 限制
 
@@ -119,8 +182,13 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
 | 擁有者關閉下載（Docs/Sheets/Slides） | Export API 被 Google 封鎖 |
 | DRM 保護的影片 | 腳本會開啟來源 URL，需手動另存 |
 
+### 依賴
+
+View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（via unpkg），其餘模式無需任何外部依賴。
+
 ### 致謝
 
+- [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — 自動捲動 & 瀏覽器縮放品質技巧
 - [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob 圖片擷取方法
 - [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — 螢幕尺寸渲染與檔案大小優化
 
@@ -130,27 +198,33 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.1
+// GDrive Universal Downloader v2.2
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
 //           Images, Video, Audio, and all other Drive-hosted files
 //
+// Quality Tips:
+//   - Zoom browser (Ctrl+/Ctrl-) BEFORE running to control resolution
+//   - Adjust SCALE and QUALITY below for fine-tuning
+//
 // Credits:
-//   zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader
-//   mhsohan/How-to-download-protected-view-only-files-from-google-drive-
+//   zeltox/Google-Drive-PDF-Downloader (auto-scroll, zoom tip)
+//   zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader (blob capture)
+//   mhsohan/How-to-download-protected-view-only-files-from-google-drive- (display size)
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.1 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.2 starting...');
 
-  // ── Settings (adjust as needed) ────────────────────────────────
-  // SCALE: 1.0 = screen size (smallest file), 2.0 = full retina (largest)
-  const SCALE   = 1.0;
-  // QUALITY: 0.0~1.0, higher = better quality but larger file
-  const QUALITY = 0.82;
-  // SCROLL_DELAY: ms to wait between scroll steps (increase on slow connections)
+  // ── Settings ────────────────────────────────────────────────────
+  // SCALE: 1.0 = screen size (recommended), 2.0 = full retina
+  // Tip: use browser zoom (Ctrl+/-) instead of SCALE for quality control
+  const SCALE        = 1.0;
+  // QUALITY: 0.0~1.0 JPEG quality (0.82 = balanced, 0.95 = near-lossless)
+  const QUALITY      = 0.82;
+  // SCROLL_DELAY: ms between scroll steps (increase on slow connections)
   const SCROLL_DELAY = 200;
 
-  // ── Utilities ──────────────────────────────────────────────────
+  // ── Utilities ───────────────────────────────────────────────────
 
   const getTitle = () => {
     const meta = document.querySelector('meta[itemprop="name"]')?.content;
@@ -199,19 +273,19 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
     document.body.appendChild(s);
   });
 
-  // Auto-scroll to trigger lazy-loaded pages
+  // Auto-scroll to trigger all lazy-loaded pages (inspired by zeltox)
   const autoScroll = async () => {
     console.log('⏬ Auto-scrolling to load all pages...');
-    const scrollable = document.querySelector('.ndfHFb-c4YZDc-cYSp0e-DARUcf')
-      || document.querySelector('[role="main"]')
-      || document.documentElement;
+    const scrollable =
+      document.querySelector('.ndfHFb-c4YZDc-cYSp0e-DARUcf') ||
+      document.querySelector('[role="main"]') ||
+      document.documentElement;
     const total = scrollable.scrollHeight;
     const step  = window.innerHeight;
     for (let pos = 0; pos <= total; pos += step) {
       scrollable.scrollTo(0, pos);
       await sleep(SCROLL_DELAY);
     }
-    // Scroll back to top
     scrollable.scrollTo(0, 0);
     await sleep(300);
     console.log('✅ Scroll complete');
@@ -222,7 +296,6 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
   const url = window.location.href;
 
   const detect = () => {
-    // View-Only PDF: rendered as blob images
     const blobImgs = [...document.getElementsByTagName('img')]
       .filter(img => img.src.startsWith('blob:https://drive.google.com/'));
     if (blobImgs.length > 0) return 'blob-pdf';
@@ -233,24 +306,20 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
     if (/docs\.google\.com\/forms/i.test(url))        return 'gforms';
     if (/docs\.google\.com\/drawings/i.test(url))     return 'gdrawings';
 
-    if (document.querySelector('video'))              return 'video';
-    if (document.querySelector('audio'))              return 'audio';
+    if (document.querySelector('video'))   return 'video';
+    if (document.querySelector('audio'))   return 'audio';
     if (document.querySelector(
       'img.stretch-fit, #drive-viewer-main-content img, .drive-viewer-content img'
-    ))                                                return 'image';
+    ))                                     return 'image';
     if (document.querySelector(
       '.drive-viewer-text-container, .docs-texteventtarget-iframe, pre'
-    ))                                                return 'text';
-    if (/drive\.google\.com\/file\/d\//i.test(url))  return 'file-export';
+    ))                                     return 'text';
+    if (/drive\.google\.com\/file\/d\//i.test(url)) return 'file-export';
 
     return 'unknown';
   };
 
   // ── Strategy 1: View-Only PDF ───────────────────────────────────
-  // Key insight from mhsohan: use img.width (display size) NOT img.naturalWidth
-  // (natural/retina size). naturalWidth can be 2x larger, making file 4x bigger.
-  // Using display size gives much smaller files with perfectly readable quality.
-
   const processBlobPDF = async () => {
     await autoScroll();
 
@@ -259,30 +328,32 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
 
     if (blobImgs.length === 0) {
       console.error('❌ No page images found even after scrolling.');
-      console.log('👉 Try manually scrolling to the bottom of the PDF, then run the script again.');
+      console.log('👉 Try manually scrolling to the bottom of the PDF, then run again.');
       return;
     }
 
     await loadScript('https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js');
     const { jsPDF } = window.jspdf;
 
-    console.log('📄 Found ' + blobImgs.length + ' pages, generating PDF...');
-    console.log('   SCALE=' + SCALE + '  QUALITY=' + QUALITY);
+    const zoom = window.devicePixelRatio || 1;
+    console.log('📄 Found ' + blobImgs.length + ' pages');
+    console.log('   Browser zoom: ~' + Math.round((window.outerWidth / window.innerWidth) * 100) + '%'
+      + '  SCALE: ' + SCALE + '  QUALITY: ' + QUALITY);
 
     let pdf = null;
 
     for (let i = 0; i < blobImgs.length; i++) {
       const img = blobImgs[i];
 
-      // Use display size × SCALE (not naturalWidth) — key to smaller file size
+      // Use display size × SCALE (not naturalWidth) — keeps file size manageable
+      // Browser zoom already affects img.width, so zooming browser = free quality boost
       const w = Math.round(img.width  * SCALE);
       const h = Math.round(img.height * SCALE);
 
       const canvas = document.createElement('canvas');
-      const ctx    = canvas.getContext('2d');
       canvas.width  = w;
       canvas.height = h;
-      ctx.drawImage(img, 0, 0, w, h);
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
       const imgData     = canvas.toDataURL('image/jpeg', QUALITY);
       const orientation = w > h ? 'l' : 'p';
@@ -308,69 +379,49 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
   const type  = detect();
   const title = getTitle();
   const ext   = getTitleExt();
+  const getId = () => url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1];
 
   console.log('🔍 Detected: ' + type + ' | File: ' + title);
 
-  if (type === 'blob-pdf') {
-    processBlobPDF();
-    return;
-  }
-
-  // Google Workspace exports
-  const getId = () => url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+  if (type === 'blob-pdf') { processBlobPDF(); return; }
 
   if (type === 'gdoc') {
-    const id = getId();
-    if (!id) { console.error('Cannot get document ID'); return; }
+    const id = getId(); if (!id) { console.error('Cannot get document ID'); return; }
     triggerDownload('https://docs.google.com/document/d/' + id + '/export?format=docx', title + '.docx');
-    console.log('📝 Downloading → ' + title + '.docx');
-    return;
+    console.log('📝 Downloading → ' + title + '.docx'); return;
   }
 
   if (type === 'gsheet') {
-    const id = getId();
-    if (!id) { console.error('Cannot get spreadsheet ID'); return; }
+    const id = getId(); if (!id) { console.error('Cannot get spreadsheet ID'); return; }
     triggerDownload('https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx', title + '.xlsx');
-    console.log('📊 Downloading → ' + title + '.xlsx');
-    return;
+    console.log('📊 Downloading → ' + title + '.xlsx'); return;
   }
 
   if (type === 'gslides') {
-    const id = getId();
-    if (!id) { console.error('Cannot get presentation ID'); return; }
+    const id = getId(); if (!id) { console.error('Cannot get presentation ID'); return; }
     triggerDownload('https://docs.google.com/presentation/d/' + id + '/export/pptx', title + '.pptx');
-    console.log('📑 Downloading → ' + title + '.pptx');
-    return;
+    console.log('📑 Downloading → ' + title + '.pptx'); return;
   }
 
   if (type === 'gforms') {
-    const id = getId();
-    if (!id) { console.error('Cannot get form ID'); return; }
+    const id = getId(); if (!id) { console.error('Cannot get form ID'); return; }
     triggerDownload('https://docs.google.com/forms/d/' + id + '/export?format=csv', title + '.csv');
-    console.log('📋 Downloading → ' + title + '.csv');
-    return;
+    console.log('📋 Downloading → ' + title + '.csv'); return;
   }
 
   if (type === 'gdrawings') {
-    const id = getId();
-    if (!id) { console.error('Cannot get drawing ID'); return; }
+    const id = getId(); if (!id) { console.error('Cannot get drawing ID'); return; }
     triggerDownload('https://docs.google.com/drawings/d/' + id + '/export/svg', title + '.svg');
-    console.log('🎨 Downloading → ' + title + '.svg');
-    return;
+    console.log('🎨 Downloading → ' + title + '.svg'); return;
   }
 
   if (type === 'video') {
     const video = document.querySelector('video');
     const src   = video?.src || video?.querySelector('source[src]')?.src
       || [...(video?.querySelectorAll('source') || [])].find(s => s.src)?.src;
-    if (!src) {
-      console.warn('⚠️ Cannot get video URL (may be DRM protected).');
-      console.log('👉 Right-click the video → Save video as');
-      return;
-    }
+    if (!src) { console.warn('⚠️ Cannot get video URL. Right-click → Save video as'); return; }
     console.log('🎬 Opening video in new tab → right-click to save');
-    window.open(src, '_blank');
-    return;
+    window.open(src, '_blank'); return;
   }
 
   if (type === 'audio') {
@@ -379,8 +430,7 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
     if (!src) { console.warn('⚠️ Cannot get audio URL.'); return; }
     const aExt = src.match(/\.(mp3|wav|ogg|flac|aac|m4a)/i)?.[1] || ext || 'mp3';
     triggerDownload(src, title + '.' + aExt);
-    console.log('🎵 Downloading → ' + title + '.' + aExt);
-    return;
+    console.log('🎵 Downloading → ' + title + '.' + aExt); return;
   }
 
   if (type === 'image') {
@@ -390,8 +440,7 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
     if (!img?.src) { console.error('Cannot find image source'); return; }
     const iExt = img.src.match(/\.(png|jpg|jpeg|gif|webp|svg|bmp)/i)?.[1] || ext || 'jpg';
     triggerDownload(img.src, title + '.' + iExt);
-    console.log('🖼️ Downloading → ' + title + '.' + iExt);
-    return;
+    console.log('🖼️ Downloading → ' + title + '.' + iExt); return;
   }
 
   if (type === 'text') {
@@ -400,26 +449,19 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
     const blob    = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const tExt    = ext || 'txt';
     triggerDownload(URL.createObjectURL(blob), title + '.' + tExt);
-    console.log('📋 Downloading → ' + title + '.' + tExt);
-    return;
+    console.log('📋 Downloading → ' + title + '.' + tExt); return;
   }
 
   if (type === 'file-export') {
-    const id   = getId();
-    if (!id) { console.error('Cannot get file ID'); return; }
+    const id   = getId(); if (!id) { console.error('Cannot get file ID'); return; }
     const fExt = ext || 'pdf';
     triggerDownload('https://drive.google.com/uc?export=download&id=' + id, title + '.' + fExt);
     console.log('📁 Downloading → ' + title + '.' + fExt);
-    console.log('⚠️ If a "no permission" page appears, the owner has disabled downloads.');
-    return;
+    console.log('⚠️ If "no permission" appears, the owner has disabled downloads.'); return;
   }
 
   console.warn('⚠️ Could not auto-detect file type.');
-  console.log(
-    'Please check:\n' +
-    '1. You are on a Google Drive file preview page\n' +
-    '2. Try refreshing the page and running the script again'
-  );
+  console.log('Please check:\n1. You are on a Google Drive preview page\n2. Try refreshing and running again');
 
 })();
 ```

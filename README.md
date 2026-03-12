@@ -41,11 +41,11 @@ A browser Console script that auto-detects Google Drive file types and applies t
 1. Open the Google Drive video page or **YouTube watch page**
 2. Open Console (`F12`)
 3. Paste and run the script
-4. For YouTube: script reads `ytInitialPlayerResponse` to get all available stream URLs
-5. **Best muxed quality auto-downloads immediately** (up to 720p, video+audio in one file)
-6. To pick a specific quality, run `__gdriveDownloadStream(N)` in Console after the list appears
+4. For YouTube: script starts **MediaRecorder** on the `<video>` element and records the live stream
+5. Video plays automatically — **do not close or navigate away**
+6. File downloads automatically when the video ends, or run `__stopRecording()` to stop early
 
-> **YouTube quality note**: Muxed streams (direct download) go up to **720p**. For 1080p+ you need yt-dlp since those streams have separate video/audio tracks that require merging.
+> **YouTube quality note**: The recorded quality matches whatever YouTube is currently streaming — usually 360p–720p depending on your connection and YouTube's ABR selection.
 
 **All other formats**
 
@@ -54,17 +54,19 @@ Open the file preview in Google Drive, open Console, paste and run. It auto-dete
 ### Video Strategy: How It Works
 
 ```
-Browser XHR/fetch  ──intercept──▶  capture googlevideo.com URLs
-                                          │
-                              ┌───────────┴───────────┐
-                              ▼                       ▼
-                    Direct MP4 found          HLS/DASH manifest
-                    → auto download           → show URL + yt-dlp command
-```
-
-If the video uses HLS (`.m3u8`), the script will print a ready-to-use `yt-dlp` command:
-```bash
-yt-dlp "https://..." -o "filename.mp4"
+YouTube page detected
+        │
+        ▼
+MediaRecorder.captureStream(<video>)
+        │
+        ▼
+Records live stream in real-time
+        │
+        ▼
+Video ends / __stopRecording() called
+        │
+        ▼
+Blob → auto-download (.webm / .mp4)
 ```
 
 ### Quality vs File Size (PDF)
@@ -103,8 +105,8 @@ yt-dlp "https://..." -o "filename.mp4"
 | Situation | Result |
 |-----------|--------|
 | Owner disabled downloads (Docs/Sheets/Slides) | Export API blocked by Google |
-| Video with DRM (Widevine) | Cannot decrypt; URL shown but unplayable |
-| HLS / DASH / videoplayback stream | Segmented — direct download impossible; yt-dlp command provided |
+| Video with DRM (Widevine) | captureStream() returns empty frames |
+| YouTube video | Recorded via MediaRecorder — quality matches current stream |
 
 ### Dependencies
 
@@ -116,7 +118,6 @@ yt-dlp "https://..." -o "filename.mp4"
 - [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — auto-scroll & browser zoom tip
 - [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob image capture
 - [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — display-size optimization
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — inspired the XHR/fetch intercept approach
 
 ---
 
@@ -157,11 +158,11 @@ yt-dlp "https://..." -o "filename.mp4"
 1. 開啟 Google Drive 影片頁面或 **YouTube 觀看頁面**
 2. 開啟 Console（`F12`）
 3. 貼上並執行腳本
-4. YouTube：腳本從 `ytInitialPlayerResponse` 讀取所有可用串流 URL
-5. **最佳畫質自動開始下載**（最高 720p，影音合一檔案）
-6. 若要選擇其他畫質，在 Console 執行 `__gdriveDownloadStream(N)` 即可
+4. YouTube：腳本對 `<video>` 元素啟動 **MediaRecorder**，即時錄製串流
+5. 影片自動播放 — **不要關閉或離開此頁面**
+6. 影片結束時自動下載，或執行 `__stopRecording()` 提前停止
 
-> **YouTube 畫質說明**：可直接下載的合併串流最高到 **720p**。1080p 以上需要 yt-dlp，因為那些串流的影像和音訊是分開的，需要額外合併。
+> **YouTube 畫質說明**：錄製品質取決於 YouTube 當前串流畫質，通常為 360p–720p（依網路速度和 YouTube ABR 決定）。
 
 **其他格式**
 
@@ -170,17 +171,19 @@ yt-dlp "https://..." -o "filename.mp4"
 ### 影片策略：運作原理
 
 ```
-瀏覽器 XHR/fetch  ──攔截──▶  捕捉 googlevideo.com URL
-                                      │
-                          ┌───────────┴───────────┐
-                          ▼                       ▼
-                  找到直接 MP4             找到 HLS/DASH 串流
-                  → 自動下載              → 顯示 URL + yt-dlp 指令
-```
-
-若影片使用 HLS（`.m3u8`），腳本會印出可直接使用的 `yt-dlp` 指令：
-```bash
-yt-dlp "https://..." -o "filename.mp4"
+偵測到 YouTube 頁面
+        │
+        ▼
+MediaRecorder.captureStream(<video>)
+        │
+        ▼
+即時錄製串流
+        │
+        ▼
+影片結束 / 執行 __stopRecording()
+        │
+        ▼
+Blob → 自動下載（.webm / .mp4）
 ```
 
 ### PDF 品質與檔案大小控制
@@ -219,8 +222,8 @@ yt-dlp "https://..." -o "filename.mp4"
 | 情況 | 結果 |
 |------|------|
 | 擁有者關閉下載（Docs/Sheets/Slides） | Export API 被 Google 封鎖 |
-| 影片有 DRM（Widevine）保護 | 無法解密，URL 顯示但無法播放 |
-| HLS / DASH / videoplayback 串流 | 分段串流，無法直接下載；提供 yt-dlp 指令 |
+| 影片有 DRM（Widevine）保護 | captureStream() 只錄到空白畫面 |
+| YouTube 影片 | 透過 MediaRecorder 即時錄製，品質取決於當前串流 |
 
 ### 依賴
 
@@ -232,7 +235,6 @@ yt-dlp "https://..." -o "filename.mp4"
 - [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — 自動捲動 & 瀏覽器縮放技巧
 - [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob 圖片擷取
 - [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — 螢幕尺寸優化
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 啟發了 XHR/fetch 攔截的設計思路
 
 ---
 
@@ -240,22 +242,22 @@ yt-dlp "https://..." -o "filename.mp4"
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.3
+// GDrive Universal Downloader v2.5
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
-//           Images, Video (yt-dlp style intercept), Audio, and more
+//           Images, Video (MediaRecorder capture), Audio, and more
 //
-// Video strategy inspired by yt-dlp:
-//   Hook XHR + fetch to intercept real stream URLs before they load
+// YouTube video strategy:
+//   captureStream() on <video> element → MediaRecorder → Blob → download
+//   No external tools required, works entirely in the browser.
 //
 // Credits:
 //   zeltox/Google-Drive-PDF-Downloader (auto-scroll, zoom tip)
 //   zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader (blob capture)
 //   mhsohan/How-to-download-protected-view-only-files-from-google-drive- (display size)
-//   yt-dlp (XHR/fetch intercept concept)
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.3 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.5 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
   const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
@@ -407,7 +409,7 @@ yt-dlp "https://..." -o "filename.mp4"
     return 'unknown';
   };
 
-  // ── Strategy: Video (yt-dlp style) ─────────────────────────────
+  // ── Strategy: Video ─────────────────────────────────────────────
   const processVideo = async () => {
     const title = getTitle();
 
@@ -490,31 +492,55 @@ yt-dlp "https://..." -o "filename.mp4"
         return;
       }
 
-      // Pick best supported codec
-      const mimeType = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+      // Chrome MediaRecorder only supports webm — mp4 silently fails
+      const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
         .find(t => MediaRecorder.isTypeSupported(t)) || 'video/webm';
 
       const recorder = new MediaRecorder(stream, { mimeType });
       const chunks   = [];
 
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
       recorder.onstop = () => {
-        const blob    = new Blob(chunks, { type: mimeType });
-        const ext     = mimeType.includes('mp4') ? 'mp4' : 'webm';
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl; a.download = title + '.' + ext;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-        const mb = (blob.size / 1024 / 1024).toFixed(1);
-        console.log('✅ Downloaded: ' + title + '.' + ext + ' (' + mb + ' MB)');
+        // Wait one tick to ensure the final ondataavailable has fired
+        setTimeout(() => {
+          if (chunks.length === 0) {
+            console.error('❌ No data recorded. The video may be DRM-protected or captureStream() returned empty frames.');
+            return;
+          }
+          const blob    = new Blob(chunks, { type: 'video/webm' });
+          const mb      = (blob.size / 1024 / 1024).toFixed(1);
+          const blobUrl = URL.createObjectURL(blob);
+
+          // Method 1: <a> click
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = title + '.webm';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          // Method 2: fallback — open blob in new tab so user can save manually
+          setTimeout(() => {
+            const stillNeedsDownload = !document.querySelector('a[download]');
+            window.open(blobUrl, '_blank');
+            console.log('💾 If download did not start automatically, save the file from the new tab (Ctrl+S / Cmd+S)');
+          }, 1000);
+
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+          console.log('✅ Recording complete: ' + title + '.webm (' + mb + ' MB)');
+          console.log('   Download should start automatically. If not, a new tab will open — press Cmd+S to save.');
+        }, 300);
       };
 
       // Make sure video is playing so MediaRecorder gets data
       videoEl.play().catch(() => {});
-      recorder.start(1000); // collect data every 1s
+      recorder.start(1000); // flush chunk every 1s
 
-      const duration = videoEl.duration || 0;
+      const duration  = videoEl.duration || 0;
       const remaining = Math.max(0, (duration - videoEl.currentTime));
 
       console.log('🔴 Recording started (' + mimeType + ')');
@@ -527,21 +553,20 @@ yt-dlp "https://..." -o "filename.mp4"
         console.log('   Duration unknown — run  __stopRecording()  when done watching.');
       }
 
-      // Expose stop function
-      window.__stopRecording = () => {
-        if (recorder.state !== 'inactive') {
+      const doStop = () => {
+        if (recorder.state === 'inactive') return;
+        recorder.requestData(); // flush any buffered data before stopping
+        setTimeout(() => {
           recorder.stop();
           console.log('⏹ Recording stopped — preparing download...');
-        }
+        }, 200);
       };
 
+      // Expose stop function
+      window.__stopRecording = doStop;
+
       // Auto-stop when video ends
-      videoEl.addEventListener('ended', () => {
-        if (recorder.state !== 'inactive') {
-          recorder.stop();
-          console.log('⏹ Video ended — preparing download...');
-        }
-      }, { once: true });
+      videoEl.addEventListener('ended', doStop, { once: true });
 
       return;
     }
@@ -605,8 +630,7 @@ yt-dlp "https://..." -o "filename.mp4"
     console.log('   Stream URLs     : ' + streamUrls.length);
 
     // Step 5: Only attempt direct download for true standalone MP4/WebM files
-    // NOTE: videoplayback / googlevideo URLs are segmented streams — downloading
-    // one segment gives a broken file. Route all stream URLs to yt-dlp instead.
+    // NOTE: videoplayback / googlevideo URLs are segmented — one segment = broken file
     if (directMp4.length > 0) {
       const best = directMp4.sort((a, b) => b.length - a.length)[0];
       console.log('✅ Direct MP4 found — downloading...');
@@ -615,34 +639,25 @@ yt-dlp "https://..." -o "filename.mp4"
       return;
     }
 
-    // Step 6: All streaming formats → yt-dlp / ffmpeg command
-    // Includes: HLS (.m3u8), DASH (.mpd), videoplayback, googlevideo
-    const ytdlpTarget =
+    // Step 6: Segmented stream detected — cannot download directly in browser
+    const streamTarget =
       hlsUrls[0] ||
       dashUrls[0] ||
-      streamUrls.sort((a, b) => b.length - a.length)[0]; // longest = most params
+      streamUrls.sort((a, b) => b.length - a.length)[0];
 
-    if (ytdlpTarget) {
+    if (streamTarget) {
       const streamType =
-        hlsUrls.length     > 0 ? 'HLS (.m3u8)' :
-        dashUrls.length    > 0 ? 'DASH (.mpd)' :
-                                  'Stream (videoplayback)';
-      console.warn('⚠️ ' + streamType + ' detected — segmented stream, cannot download directly.');
-      console.log('');
-      console.log('📋 yt-dlp command:');
-      console.log('  yt-dlp "' + ytdlpTarget + '" -o "' + title + '.mp4"');
-      console.log('');
-      console.log('📋 ffmpeg command:');
-      console.log('  ffmpeg -i "' + ytdlpTarget + '" -c copy "' + title + '.mp4"');
-      console.log('');
-      console.log('💡 Tip: install yt-dlp →  brew install yt-dlp  or  pip install yt-dlp');
+        hlsUrls.length  > 0 ? 'HLS (.m3u8)' :
+        dashUrls.length > 0 ? 'DASH (.mpd)' :
+                               'Stream (videoplayback)';
+      console.warn('⚠️ ' + streamType + ' detected — segmented stream, cannot download directly in browser.');
+      console.log('💡 Use a browser extension like "Video DownloadHelper" to capture this stream.');
       return;
     }
 
     // Fallback: show all captured URLs
     console.log('📋 All captured URLs:');
     urls.forEach((u, i) => console.log('  [' + i + '] ' + u));
-    console.log('Copy the most relevant URL and use with yt-dlp.');
   };
 
   // ── Strategy: View-Only PDF ─────────────────────────────────────

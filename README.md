@@ -104,7 +104,7 @@ yt-dlp "https://..." -o "filename.mp4"
 |-----------|--------|
 | Owner disabled downloads (Docs/Sheets/Slides) | Export API blocked by Google |
 | Video with DRM (Widevine) | Cannot decrypt; URL shown but unplayable |
-| HLS video stream | URL provided for use with yt-dlp |
+| HLS / DASH / videoplayback stream | Segmented — direct download impossible; yt-dlp command provided |
 
 ### Dependencies
 
@@ -220,7 +220,7 @@ yt-dlp "https://..." -o "filename.mp4"
 |------|------|
 | 擁有者關閉下載（Docs/Sheets/Slides） | Export API 被 Google 封鎖 |
 | 影片有 DRM（Widevine）保護 | 無法解密，URL 顯示但無法播放 |
-| HLS 影片串流 | 提供 URL 供 yt-dlp 使用 |
+| HLS / DASH / videoplayback 串流 | 分段串流，無法直接下載；提供 yt-dlp 指令 |
 
 ### 依賴
 
@@ -470,9 +470,10 @@ yt-dlp "https://..." -o "filename.mp4"
     console.log('   DASH (.mpd)     : ' + dashUrls.length);
     console.log('   Stream URLs     : ' + streamUrls.length);
 
-    // Step 5: Try to download best available option
+    // Step 5: Only attempt direct download for true standalone MP4/WebM files
+    // NOTE: videoplayback / googlevideo URLs are segmented streams — downloading
+    // one segment gives a broken file. Route all stream URLs to yt-dlp instead.
     if (directMp4.length > 0) {
-      // Sort by URL length (longer URLs usually have more quality params)
       const best = directMp4.sort((a, b) => b.length - a.length)[0];
       console.log('✅ Direct MP4 found — downloading...');
       triggerDownload(best, title + '.mp4');
@@ -480,34 +481,34 @@ yt-dlp "https://..." -o "filename.mp4"
       return;
     }
 
-    if (streamUrls.length > 0) {
-      const best = streamUrls.sort((a, b) => b.length - a.length)[0];
-      console.log('✅ Stream URL found — attempting download...');
-      triggerDownload(best, title + '.mp4');
-      console.log('🎬 Downloading → ' + title + '.mp4');
-      return;
-    }
+    // Step 6: All streaming formats → yt-dlp / ffmpeg command
+    // Includes: HLS (.m3u8), DASH (.mpd), videoplayback, googlevideo
+    const ytdlpTarget =
+      hlsUrls[0] ||
+      dashUrls[0] ||
+      streamUrls.sort((a, b) => b.length - a.length)[0]; // longest = most params
 
-    // Step 6: HLS/DASH — provide yt-dlp command
-    if (hlsUrls.length > 0 || dashUrls.length > 0) {
-      const manifestUrl = (hlsUrls[0] || dashUrls[0]);
-      const type = hlsUrls.length > 0 ? 'HLS (.m3u8)' : 'DASH (.mpd)';
-      console.warn('⚠️ ' + type + ' stream detected — cannot download directly in browser.');
-      console.log('📋 Use yt-dlp to download:');
+    if (ytdlpTarget) {
+      const streamType =
+        hlsUrls.length     > 0 ? 'HLS (.m3u8)' :
+        dashUrls.length    > 0 ? 'DASH (.mpd)' :
+                                  'Stream (videoplayback)';
+      console.warn('⚠️ ' + streamType + ' detected — segmented stream, cannot download directly.');
       console.log('');
-      console.log('  yt-dlp "' + manifestUrl + '" -o "' + title + '.mp4"');
+      console.log('📋 yt-dlp command:');
+      console.log('  yt-dlp "' + ytdlpTarget + '" -o "' + title + '.mp4"');
       console.log('');
-      console.log('📋 Or ffmpeg:');
-      console.log('  ffmpeg -i "' + manifestUrl + '" -c copy "' + title + '.mp4"');
+      console.log('📋 ffmpeg command:');
+      console.log('  ffmpeg -i "' + ytdlpTarget + '" -c copy "' + title + '.mp4"');
       console.log('');
-      console.log('🔗 Manifest URL copied to console — select and copy the line above.');
+      console.log('💡 Tip: install yt-dlp →  brew install yt-dlp  or  pip install yt-dlp');
       return;
     }
 
     // Fallback: show all captured URLs
     console.log('📋 All captured URLs:');
     urls.forEach((u, i) => console.log('  [' + i + '] ' + u));
-    console.log('Copy the most relevant URL and use with yt-dlp or your browser downloader.');
+    console.log('Copy the most relevant URL and use with yt-dlp.');
   };
 
   // ── Strategy: View-Only PDF ─────────────────────────────────────

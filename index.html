@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDrive Universal Downloader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #08090d;
+    --surface: #0f1017;
+    --surface2: #14151f;
+    --border: #1c1d2e;
+    --accent: #7c6af7;
+    --accent2: #f7a26a;
+    --accent3: #4ff7b8;
+    --text: #dde0f0;
+    --muted: #5a5c78;
+    --success: #4ff7b8;
+    --warn: #f7d26a;
+    --code-bg: #0b0c14;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 48px 20px 80px;
+    line-height: 1.65;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 10% 0%, rgba(124,106,247,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 90% 100%, rgba(79,247,184,0.05) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* ── Header ── */
+  header { margin-bottom: 52px; }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before { content: ''; width: 24px; height: 1px; background: var(--accent); opacity: 0.5; }
+
+  h1 {
+    font-size: clamp(36px, 5.5vw, 58px);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+    margin-bottom: 18px;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  h1 span { color: var(--accent3); }
+
+  .lead { color: var(--muted); font-size: 15px; max-width: 520px; }
+
+  /* ── Type matrix ── */
+  .type-matrix {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 10px;
+    margin: 40px 0 52px;
+  }
+
+  .type-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    transition: border-color 0.2s;
+  }
+  .type-card:hover { border-color: var(--accent); }
+
+  .type-icon { font-size: 20px; margin-bottom: 8px; }
+  .type-label { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .type-method {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent3);
+    background: rgba(79,247,184,0.08);
+    padding: 2px 7px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  /* ── Section title ── */
+  .section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 24px; margin-bottom: 48px; }
+
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 18px; align-items: start; }
+
+  .step-num {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, rgba(124,106,247,0.15), rgba(124,106,247,0.05));
+    border: 1px solid rgba(124,106,247,0.3);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; font-size: 16px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .step-content h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .step-content p { font-size: 13px; color: var(--muted); }
+
+  kbd {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--text);
+  }
+
+  /* ── Code block ── */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.015);
+  }
+
+  .code-meta { display: flex; align-items: center; gap: 12px; }
+
+  .dot-row { display: flex; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; }
+  .dot.y { background: #febc2e; }
+  .dot.g { background: #28c840; }
+
+  .code-lang {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--accent2);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .copy-btn {
+    background: rgba(124,106,247,0.12);
+    border: 1px solid rgba(124,106,247,0.3);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .copy-btn:hover { background: rgba(124,106,247,0.25); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--success); border-color: rgba(79,247,184,0.4); background: rgba(79,247,184,0.08); }
+
+  pre {
+    padding: 22px 20px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.75;
+    color: #c0c8e8;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .kw { color: #b39ddb; }
+  .fn { color: #82b1ff; }
+  .str { color: #a5d6a7; }
+  .cm { color: #4a4e6a; font-style: italic; }
+  .num { color: #ffcc80; }
+  .var { color: #ef9a9a; }
+  .op { color: #80cbc4; }
+
+  /* ── Warning ── */
+  .warning-box {
+    background: rgba(247,210,106,0.05);
+    border: 1px solid rgba(247,210,106,0.2);
+    border-left: 3px solid var(--warn);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin-bottom: 44px;
+    font-size: 12.5px;
+    color: rgba(247,210,106,0.8);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
+  }
+  .warning-box strong { color: var(--warn); }
+
+  /* ── Notes grid ── */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 10px; }
+
+  .note-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 18px;
+    border-radius: 6px;
+  }
+  .note-card .nt-icon { font-size: 20px; margin-bottom: 10px; }
+  .note-card h4 { font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
+  .note-card p { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="eyebrow">Universal Script</div>
+    <h1>GDrive <em>Universal</em><br><span>Downloader</span></h1>
+    <p class="lead">一段腳本，自動偵測 Google Drive 檔案類型，選擇最佳下載策略。</p>
+  </header>
+
+  <p class="section-title">支援的檔案類型</p>
+  <div class="type-matrix">
+    <div class="type-card"><div class="type-icon">📄</div><div class="type-label">PDF</div><div class="type-method">Canvas 擷取</div></div>
+    <div class="type-card"><div class="type-icon">📝</div><div class="type-label">Google Docs</div><div class="type-method">Export API</div></div>
+    <div class="type-card"><div class="type-icon">📊</div><div class="type-label">Google Sheets</div><div class="type-method">Export API</div></div>
+    <div class="type-card"><div class="type-icon">📑</div><div class="type-label">Google Slides</div><div class="type-method">Export API</div></div>
+    <div class="type-card"><div class="type-icon">🖼️</div><div class="type-label">圖片</div><div class="type-method">直接下載</div></div>
+    <div class="type-card"><div class="type-icon">🎬</div><div class="type-label">影片</div><div class="type-method">來源擷取</div></div>
+    <div class="type-card"><div class="type-icon">📃</div><div class="type-label">Word / PPTX</div><div class="type-method">Canvas 擷取</div></div>
+    <div class="type-card"><div class="type-icon">📋</div><div class="type-label">文字 / CSV</div><div class="type-method">文字擷取</div></div>
+  </div>
+
+  <div class="warning-box">
+    ⚠ <strong>合法使用提醒：</strong>本腳本僅供用於您本人擁有或已獲授權存取的文件。<br>請遵守著作權及 Google 服務條款。
+  </div>
+
+  <p class="section-title">使用步驟</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-content">
+        <h3>在瀏覽器開啟 Google Drive 檔案</h3>
+        <p>用 Chrome 或 Edge 開啟任何 Google Drive 可預覽的檔案，等待完全載入。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-content">
+        <h3>開啟 Console</h3>
+        <p>按 <kbd>F12</kbd> 或 <kbd>Ctrl+Shift+J</kbd>（Mac：<kbd>⌘⌥J</kbd>），切換到 <strong>Console</strong> 分頁。</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-content">
+        <h3>貼上腳本並執行</h3>
+        <p>複製下方腳本，貼到 Console 後按 <kbd>Enter</kbd>。腳本會自動偵測類型並處理。</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-title">通用下載腳本</p>
+
+  <div class="code-block">
+    <div class="code-header">
+      <div class="code-meta">
+        <div class="dot-row"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+        <span class="code-lang">JavaScript — Console Script</span>
+      </div>
+      <button class="copy-btn" id="copyBtn" onclick="copyScript()">複製腳本</button>
+    </div>
+    <pre id="scriptCode"><span class="cm">// ================================================================
+// GDrive Universal Downloader
+// 支援：PDF、Google Docs/Sheets/Slides、圖片、影片、文字、Office 檔
+// 使用方式：在 Google Drive 檔案預覽頁面的 Console 執行
+// ================================================================</span>
+
+(<span class="kw">async</span> <span class="kw">function</span> <span class="fn">gdriveUniversalDownload</span>() {
+
+  <span class="cm">// ── 工具函式 ──────────────────────────────────────────────────</span>
+
+  <span class="kw">const</span> <span class="fn">getTitle</span> = () =>
+    document.title
+      .<span class="fn">replace</span>(/\s*[-–—]\s*Google.*/i, <span class="str">''</span>)
+      .<span class="fn">replace</span>(/\.\w{2,5}$/, <span class="str">''</span>)
+      .<span class="fn">trim</span>() || <span class="str">'gdrive-file'</span>;
+
+  <span class="kw">const</span> <span class="fn">triggerDownload</span> = (url, filename) => {
+    <span class="kw">const</span> a = document.<span class="fn">createElement</span>(<span class="str">'a'</span>);
+    a.href = url; a.download = filename;
+    document.body.<span class="fn">appendChild</span>(a);
+    a.<span class="fn">click</span>();
+    document.body.<span class="fn">removeChild</span>(a);
+  };
+
+  <span class="kw">const</span> <span class="fn">sleep</span> = ms => <span class="kw">new</span> <span class="fn">Promise</span>(r => <span class="fn">setTimeout</span>(r, ms));
+
+  <span class="kw">const</span> <span class="fn">loadScript</span> = src => <span class="kw">new</span> <span class="fn">Promise</span>((resolve, reject) => {
+    <span class="kw">if</span> (document.<span class="fn">querySelector</span>(<span class="str">`script[src="${src}"]`</span>)) { <span class="fn">resolve</span>(); <span class="kw">return</span>; }
+    <span class="kw">const</span> s = document.<span class="fn">createElement</span>(<span class="str">'script'</span>);
+    s.src = src; s.<span class="fn">onload</span> = resolve; s.<span class="fn">onerror</span> = reject;
+    document.head.<span class="fn">appendChild</span>(s);
+  });
+
+  <span class="cm">// ── 偵測檔案類型 ──────────────────────────────────────────────</span>
+
+  <span class="kw">const</span> url  = window.location.href;
+  <span class="kw">const</span> host = window.location.hostname;
+
+  <span class="kw">const</span> <span class="fn">detect</span> = () => {
+    <span class="kw">if</span> (/docs\.google\.com\/document/i.<span class="fn">test</span>(url))       <span class="kw">return</span> <span class="str">'gdoc'</span>;
+    <span class="kw">if</span> (/docs\.google\.com\/spreadsheets/i.<span class="fn">test</span>(url))   <span class="kw">return</span> <span class="str">'gsheet'</span>;
+    <span class="kw">if</span> (/docs\.google\.com\/presentation/i.<span class="fn">test</span>(url))   <span class="kw">return</span> <span class="str">'gslides'</span>;
+    <span class="kw">if</span> (document.<span class="fn">querySelector</span>(<span class="str">'div[data-page-number] canvas'</span>)) <span class="kw">return</span> <span class="str">'canvas'</span>;
+    <span class="kw">if</span> (document.<span class="fn">querySelector</span>(<span class="str">'video[src], video source'</span>))     <span class="kw">return</span> <span class="str">'video'</span>;
+    <span class="kw">if</span> (document.<span class="fn">querySelector</span>(<span class="str">'img.stretch-fit, #drive-viewer-main-content img'</span>)) <span class="kw">return</span> <span class="str">'image'</span>;
+    <span class="kw">if</span> (document.<span class="fn">querySelector</span>(<span class="str">'.drive-viewer-text-container, .docs-texteventtarget-iframe'</span>)) <span class="kw">return</span> <span class="str">'text'</span>;
+    <span class="kw">return</span> <span class="str">'unknown'</span>;
+  };
+
+  <span class="kw">const</span> type = <span class="fn">detect</span>();
+  <span class="kw">const</span> title = <span class="fn">getTitle</span>();
+
+  console.<span class="fn">log</span>(<span class="str">`🔍 偵測類型：${type}　📝 檔名：${title}`</span>);
+
+  <span class="cm">// ── 策略 1：Google Docs → docx ────────────────────────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'gdoc'</span>) {
+    <span class="kw">const</span> id = url.<span class="fn">match</span>(/\/d\/([a-zA-Z0-9_-]+)/)?.[<span class="num">1</span>];
+    <span class="kw">if</span> (!id) { console.<span class="fn">error</span>(<span class="str">'無法取得文件 ID'</span>); <span class="kw">return</span>; }
+    console.<span class="fn">log</span>(<span class="str">'📄 下載 Google Docs → .docx'</span>);
+    <span class="fn">triggerDownload</span>(
+      <span class="str">`https://docs.google.com/document/d/${id}/export?format=docx`</span>,
+      <span class="str">`${title}.docx`</span>
+    );
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 策略 2：Google Sheets → xlsx ──────────────────────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'gsheet'</span>) {
+    <span class="kw">const</span> id = url.<span class="fn">match</span>(/\/d\/([a-zA-Z0-9_-]+)/)?.[<span class="num">1</span>];
+    <span class="kw">if</span> (!id) { console.<span class="fn">error</span>(<span class="str">'無法取得試算表 ID'</span>); <span class="kw">return</span>; }
+    console.<span class="fn">log</span>(<span class="str">'📊 下載 Google Sheets → .xlsx'</span>);
+    <span class="fn">triggerDownload</span>(
+      <span class="str">`https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`</span>,
+      <span class="str">`${title}.xlsx`</span>
+    );
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 策略 3：Google Slides → pptx ──────────────────────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'gslides'</span>) {
+    <span class="kw">const</span> id = url.<span class="fn">match</span>(/\/d\/([a-zA-Z0-9_-]+)/)?.[<span class="num">1</span>];
+    <span class="kw">if</span> (!id) { console.<span class="fn">error</span>(<span class="str">'無法取得簡報 ID'</span>); <span class="kw">return</span>; }
+    console.<span class="fn">log</span>(<span class="str">'📑 下載 Google Slides → .pptx'</span>);
+    <span class="fn">triggerDownload</span>(
+      <span class="str">`https://docs.google.com/presentation/d/${id}/export/pptx`</span>,
+      <span class="str">`${title}.pptx`</span>
+    );
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 策略 4：圖片 → 直接下載 ───────────────────────────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'image'</span>) {
+    <span class="kw">const</span> img = document.<span class="fn">querySelector</span>(
+      <span class="str">'img.stretch-fit, #drive-viewer-main-content img'</span>
+    );
+    <span class="kw">if</span> (!img?.src) { console.<span class="fn">error</span>(<span class="str">'找不到圖片來源'</span>); <span class="kw">return</span>; }
+    <span class="kw">const</span> ext = img.src.<span class="fn">match</span>(/\.(png|jpg|jpeg|gif|webp|svg)/i)?.[<span class="num">1</span>] ?? <span class="str">'jpg'</span>;
+    console.<span class="fn">log</span>(<span class="str">`🖼️ 下載圖片 → .${ext}`</span>);
+    <span class="fn">triggerDownload</span>(img.src, <span class="str">`${title}.${ext}`</span>);
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 策略 5：影片 → 擷取來源 URL ──────────────────────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'video'</span>) {
+    <span class="kw">const</span> video = document.<span class="fn">querySelector</span>(<span class="str">'video'</span>);
+    <span class="kw">const</span> src =
+      video?.src ||
+      video?.<span class="fn">querySelector</span>(<span class="str">'source'</span>)?.src ||
+      [...(video?.querySelectorAll(<span class="str">'source'</span>) ?? [])].<span class="fn">find</span>(s => s.src)?.[<span class="str">'src'</span>];
+    <span class="kw">if</span> (!src) {
+      console.<span class="fn">warn</span>(<span class="str">'⚠️ 無法直接取得影片 URL（可能受 DRM 保護）。'</span>);
+      console.<span class="fn">log</span>(<span class="str">'📋 請嘗試：右鍵點影片 → 另存影片'</span>);
+      <span class="kw">return</span>;
+    }
+    <span class="kw">const</span> ext = src.<span class="fn">match</span>(/\.(mp4|webm|mkv|mov)/i)?.[<span class="num">1</span>] ?? <span class="str">'mp4'</span>;
+    console.<span class="fn">log</span>(<span class="str">`🎬 影片 URL：${src}`</span>);
+    console.<span class="fn">log</span>(<span class="str">'📋 請在新分頁開啟上方 URL 後右鍵另存，或複製到下載工具。'</span>);
+    window.<span class="fn">open</span>(src, <span class="str">'_blank'</span>);
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 策略 6：文字 / CSV → .txt ────────────────────────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'text'</span>) {
+    <span class="kw">const</span> el = document.<span class="fn">querySelector</span>(
+      <span class="str">'.drive-viewer-text-container, pre'</span>
+    );
+    <span class="kw">const</span> content = el?.innerText ?? document.body.innerText;
+    <span class="kw">const</span> blob = <span class="kw">new</span> <span class="fn">Blob</span>([content], { type: <span class="str">'text/plain;charset=utf-8'</span> });
+    console.<span class="fn">log</span>(<span class="str">'📋 下載文字內容 → .txt'</span>);
+    <span class="fn">triggerDownload</span>(<span class="fn">URL</span>.<span class="fn">createObjectURL</span>(blob), <span class="str">`${title}.txt`</span>);
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 策略 7：Canvas 渲染（PDF / Office 預覽）→ PDF ────────────</span>
+  <span class="kw">if</span> (type === <span class="str">'canvas'</span>) {
+    <span class="kw">const</span> DELAY_MS = <span class="num">800</span>;
+    <span class="kw">const</span> SCALE    = <span class="num">2</span>;
+
+    <span class="kw">await</span> <span class="fn">loadScript</span>(
+      <span class="str">'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'</span>
+    );
+    <span class="kw">const</span> { jsPDF } = window.jspdf;
+
+    <span class="kw">const</span> <span class="fn">getPages</span> = () =>
+      [...document.<span class="fn">querySelectorAll</span>(<span class="str">'div[data-page-number]'</span>)]
+        .<span class="fn">sort</span>((a, b) =>
+          <span class="fn">parseInt</span>(a.<span class="fn">getAttribute</span>(<span class="str">'data-page-number'</span>)) -
+          <span class="fn">parseInt</span>(b.<span class="fn">getAttribute</span>(<span class="str">'data-page-number'</span>)));
+
+    <span class="kw">let</span> pages = <span class="fn">getPages</span>();
+    console.<span class="fn">log</span>(<span class="str">`📄 偵測到 ${pages.length} 頁，開始捲動載入...`</span>);
+
+    <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i < pages.length; i++) {
+      pages[i].<span class="fn">scrollIntoView</span>();
+      <span class="kw">await</span> <span class="fn">sleep</span>(DELAY_MS);
+      console.<span class="fn">log</span>(<span class="str">`  ⏳ ${i + 1} / ${pages.length}`</span>);
+    }
+
+    pages = <span class="fn">getPages</span>();
+    <span class="kw">const</span> images = [];
+    <span class="kw">let</span> maxW = <span class="num">0</span>, maxH = <span class="num">0</span>;
+
+    <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i < pages.length; i++) {
+      <span class="kw">const</span> canvas = pages[i].<span class="fn">querySelector</span>(<span class="str">'canvas'</span>);
+      <span class="kw">if</span> (!canvas) { console.<span class="fn">warn</span>(<span class="str">`第 ${i+1} 頁無 canvas，跳過`</span>); <span class="kw">continue</span>; }
+      <span class="kw">const</span> off = document.<span class="fn">createElement</span>(<span class="str">'canvas'</span>);
+      off.width = canvas.width * SCALE;
+      off.height = canvas.height * SCALE;
+      <span class="kw">const</span> ctx = off.<span class="fn">getContext</span>(<span class="str">'2d'</span>);
+      ctx.<span class="fn">scale</span>(SCALE, SCALE);
+      ctx.<span class="fn">drawImage</span>(canvas, <span class="num">0</span>, <span class="num">0</span>);
+      images.<span class="fn">push</span>({ data: off.<span class="fn">toDataURL</span>(<span class="str">'image/jpeg'</span>, <span class="num">0.95</span>), w: canvas.width, h: canvas.height });
+      <span class="kw">if</span> (canvas.width > maxW) { maxW = canvas.width; maxH = canvas.height; }
+      console.<span class="fn">log</span>(<span class="str">`  🖼️ 擷取第 ${i+1} / ${pages.length} 頁`</span>);
+    }
+
+    <span class="kw">if</span> (!images.length) { console.<span class="fn">error</span>(<span class="str">'未能擷取任何頁面'</span>); <span class="kw">return</span>; }
+
+    console.<span class="fn">log</span>(<span class="str">'📦 組合 PDF...'</span>);
+    <span class="kw">const</span> pdf = <span class="kw">new</span> <span class="fn">jsPDF</span>({
+      orientation: maxW >= maxH ? <span class="str">'landscape'</span> : <span class="str">'portrait'</span>,
+      unit: <span class="str">'px'</span>, format: [maxW, maxH], compress: <span class="kw">true</span>,
+    });
+    images.<span class="fn">forEach</span>((img, i) => {
+      <span class="kw">if</span> (i > <span class="num">0</span>) pdf.<span class="fn">addPage</span>([img.w, img.h], img.w >= img.h ? <span class="str">'landscape'</span> : <span class="str">'portrait'</span>);
+      pdf.<span class="fn">addImage</span>(img.data, <span class="str">'JPEG'</span>, <span class="num">0</span>, <span class="num">0</span>, img.w, img.h);
+    });
+    pdf.<span class="fn">save</span>(<span class="str">`${title}.pdf`</span>);
+    console.<span class="fn">log</span>(<span class="str">`🎉 完成！已下載：${title}.pdf（${images.length} 頁）`</span>);
+    <span class="kw">return</span>;
+  }
+
+  <span class="cm">// ── 找不到對應策略 ────────────────────────────────────────────</span>
+  console.<span class="fn">warn</span>(<span class="str">'⚠️ 無法自動偵測檔案類型。'</span>);
+  console.<span class="fn">log</span>(<span class="str">'請確認：\n1. 已在 Google Drive 預覽頁面執行\n2. 檔案已完全載入\n3. 嘗試重新整理後再執行'</span>);
+
+})();</pre>
+  </div>
+
+  <p class="section-title">注意事項</p>
+  <div class="notes">
+    <div class="note-card">
+      <div class="nt-icon">🔄</div>
+      <h4>格式對應</h4>
+      <p>Docs→docx、Sheets→xlsx、Slides→pptx、PDF/Office→PDF、圖片→原格式、文字→txt。</p>
+    </div>
+    <div class="note-card">
+      <div class="nt-icon">🔐</div>
+      <h4>需要登入</h4>
+      <p>Google 原生格式（Docs/Sheets/Slides）的 Export API 需要您已登入 Google 帳號。</p>
+    </div>
+    <div class="note-card">
+      <div class="nt-icon">🎬</div>
+      <h4>影片限制</h4>
+      <p>Google Drive 影片有防盜連結保護，腳本會嘗試開啟來源 URL，部分影片可能無法直接下載。</p>
+    </div>
+    <div class="note-card">
+      <div class="nt-icon">⏱️</div>
+      <h4>Canvas 速度</h4>
+      <p>PDF/Office 預覽頁數多時較慢。網速慢可將腳本中 DELAY_MS 從 800 調高至 1500。</p>
+    </div>
+  </div>
+
+  <footer>
+    <span>// gdrive-universal-downloader.html</span>
+    <span>依賴：jsPDF 2.5.1（僅 Canvas 模式需要）</span>
+  </footer>
+
+</div>
+<script>
+function copyScript() {
+  const code = document.getElementById('scriptCode').innerText;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ 已複製';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '複製腳本'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

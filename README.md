@@ -22,7 +22,7 @@ A browser Console script that auto-detects Google Drive file types and applies t
 | 📋 Google Forms | URL contains `/forms/` | `.csv` |
 | 🎨 Google Drawings | URL contains `/drawings/` | `.svg` |
 | 🖼️ Image files | DOM `img` element | Original format |
-| 🎬 Video files | DOM `<video>` element | Source URL |
+| 🎬 Video files | XHR/Fetch intercept + DOM | `.mp4` / source URL |
 | 🎵 Audio files | DOM `<audio>` element | Original format |
 | 📁 Other files (PDF, Office, zip…) | `drive.google.com/file/d/` URL | Original format |
 
@@ -36,40 +36,58 @@ A browser Console script that auto-detects Google Drive file types and applies t
 4. If Chrome shows a paste warning, type `allow pasting` and press Enter first
 5. Paste the script below and press **Enter** — it will auto-scroll and download
 
+**Video (yt-dlp style)**
+
+The script intercepts network requests to find the real video stream URL — similar to how yt-dlp works:
+
+1. Open the Google Drive video page
+2. Open Console (`F12`)
+3. Paste and run the script **before** or **while** the video is loading
+4. The script hooks into XHR/fetch to capture stream URLs automatically
+5. If a direct `.mp4` is found → auto-downloads
+6. If an HLS `.m3u8` stream is found → displays the URL for use with yt-dlp
+
 **All other formats**
 
 Open the file preview in Google Drive, open Console, paste and run. It auto-detects the type.
 
-### Quality vs File Size Control
+### Video Strategy: How It Works
 
-There are **two ways** to control output quality — use them independently or combine them:
+```
+Browser XHR/fetch  ──intercept──▶  capture googlevideo.com URLs
+                                          │
+                              ┌───────────┴───────────┐
+                              ▼                       ▼
+                    Direct MP4 found          HLS/DASH manifest
+                    → auto download           → show URL + yt-dlp command
+```
+
+If the video uses HLS (`.m3u8`), the script will print a ready-to-use `yt-dlp` command:
+```bash
+yt-dlp "https://..." -o "filename.mp4"
+```
+
+### Quality vs File Size (PDF)
 
 #### Method A — Browser Zoom (no code change needed)
-> Tip from [zeltox](https://github.com/zeltox/Google-Drive-PDF-Downloader)
-
-Before running the script, zoom your browser in or out using `Ctrl +` / `Ctrl -`.
-Since the script captures images at **screen display size**, browser zoom directly controls resolution:
 
 | Browser Zoom | Effect |
 |-------------|--------|
 | 75% | Smaller file, lower quality |
 | 100% | Default balanced |
 | 150% | Higher quality, larger file |
-| 200% | Best quality, largest file (may slow down) |
-
-> ⚠️ Do not exceed 150% when using `SCALE > 1.0` in script settings — combined scaling can cause memory issues on large PDFs.
+| 200% | Best quality (may slow down on large PDFs) |
 
 #### Method B — Script Settings
-Adjust these values at the top of the script before running:
 
 | Setting | Value | Effect |
 |---------|-------|--------|
-| `SCALE` | `1.0` | Capture at screen size (smallest file) ← recommended |
+| `SCALE` | `1.0` | Screen size — smallest file ← recommended |
 | `SCALE` | `1.5` | 1.5× screen size |
-| `SCALE` | `2.0` | Full retina resolution (largest file) |
+| `SCALE` | `2.0` | Full retina resolution |
 | `QUALITY` | `0.95` | Near-lossless JPEG |
 | `QUALITY` | `0.82` | Balanced ← default |
-| `QUALITY` | `0.70` | Smaller file, slightly lower quality |
+| `QUALITY` | `0.70` | Smaller file |
 
 #### Recommended Combinations
 
@@ -85,17 +103,20 @@ Adjust these values at the top of the script before running:
 | Situation | Result |
 |-----------|--------|
 | Owner disabled downloads (Docs/Sheets/Slides) | Export API blocked by Google |
-| DRM-protected video | Script opens source URL; manual save required |
+| Video with DRM (Widevine) | Cannot decrypt; URL shown but unplayable |
+| HLS video stream | URL provided for use with yt-dlp |
 
 ### Dependencies
 
-View-Only PDF mode dynamically loads [jsPDF](https://github.com/parallax/jsPDF) via unpkg. All other strategies require no external dependencies.
+- View-Only PDF mode: dynamically loads [jsPDF](https://github.com/parallax/jsPDF) via unpkg
+- All other strategies: no external dependencies
 
 ### Credits
 
-- [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — auto-scroll & browser zoom quality tip
-- [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob image capture method
-- [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — display-size rendering & file size optimization
+- [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — auto-scroll & browser zoom tip
+- [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob image capture
+- [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — display-size optimization
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — inspired the XHR/fetch intercept approach
 
 ---
 
@@ -117,7 +138,7 @@ View-Only PDF mode dynamically loads [jsPDF](https://github.com/parallax/jsPDF) 
 | 📋 Google Forms | URL 含 `/forms/` | `.csv` |
 | 🎨 Google Drawings | URL 含 `/drawings/` | `.svg` |
 | 🖼️ 圖片 | DOM `img` 元素 | 原始格式 |
-| 🎬 影片 | DOM `<video>` 元素 | 來源 URL |
+| 🎬 影片 | XHR/Fetch 攔截 + DOM | `.mp4` / 串流 URL |
 | 🎵 音訊 | DOM `<audio>` 元素 | 原始格式 |
 | 📁 其他檔案（PDF、Office、zip…） | `drive.google.com/file/d/` URL | 原始格式 |
 
@@ -131,40 +152,58 @@ View-Only PDF mode dynamically loads [jsPDF](https://github.com/parallax/jsPDF) 
 4. 若 Chrome 提示無法貼上，先輸入 `allow pasting` 按 Enter
 5. 貼上腳本按 **Enter**，腳本會自動捲動並下載
 
+**影片（yt-dlp 風格）**
+
+腳本攔截網路請求來找到真正的影片串流 URL，原理與 yt-dlp 相同：
+
+1. 開啟 Google Drive 影片頁面
+2. 開啟 Console（`F12`）
+3. 在影片**載入時或載入前**貼上並執行腳本
+4. 腳本自動 hook XHR/fetch 捕捉串流 URL
+5. 找到直接 `.mp4` → 自動下載
+6. 找到 HLS `.m3u8` 串流 → 顯示 URL 供 yt-dlp 使用
+
 **其他格式**
 
 直接在 Google Drive 預覽頁面開啟 Console 執行，腳本自動偵測類型。
 
-### 品質與檔案大小控制
+### 影片策略：運作原理
 
-有**兩種方式**可以控制輸出品質，可單獨使用或組合搭配：
+```
+瀏覽器 XHR/fetch  ──攔截──▶  捕捉 googlevideo.com URL
+                                      │
+                          ┌───────────┴───────────┐
+                          ▼                       ▼
+                  找到直接 MP4             找到 HLS/DASH 串流
+                  → 自動下載              → 顯示 URL + yt-dlp 指令
+```
+
+若影片使用 HLS（`.m3u8`），腳本會印出可直接使用的 `yt-dlp` 指令：
+```bash
+yt-dlp "https://..." -o "filename.mp4"
+```
+
+### PDF 品質與檔案大小控制
 
 #### 方式 A — 瀏覽器縮放（不需改程式碼）
-> 技巧來源：[zeltox](https://github.com/zeltox/Google-Drive-PDF-Downloader)
-
-執行腳本前，用 `Ctrl +` / `Ctrl -` 調整瀏覽器縮放比例。
-因為腳本以**螢幕顯示尺寸**擷取圖片，瀏覽器縮放可直接控制解析度：
 
 | 瀏覽器縮放 | 效果 |
 |-----------|------|
 | 75% | 檔案較小，品質較低 |
 | 100% | 預設平衡 |
 | 150% | 品質較高，檔案較大 |
-| 200% | 最高品質，檔案最大（大型 PDF 可能變慢） |
-
-> ⚠️ 若腳本的 `SCALE > 1.0`，瀏覽器縮放建議不超過 150%，兩者疊加可能造成記憶體問題。
+| 200% | 最高品質（大型 PDF 可能變慢） |
 
 #### 方式 B — 腳本參數
-在執行前調整腳本頂部的設定值：
 
 | 參數 | 值 | 效果 |
 |------|---|------|
-| `SCALE` | `1.0` | 以螢幕尺寸擷取（最小檔案）← 推薦 |
+| `SCALE` | `1.0` | 螢幕尺寸，最小檔案 ← 推薦 |
 | `SCALE` | `1.5` | 1.5 倍螢幕尺寸 |
-| `SCALE` | `2.0` | 完整 retina 解析度（最大檔案） |
+| `SCALE` | `2.0` | 完整 retina 解析度 |
 | `QUALITY` | `0.95` | 接近無損 JPEG |
 | `QUALITY` | `0.82` | 平衡 ← 預設 |
-| `QUALITY` | `0.70` | 較小檔案，品質略降 |
+| `QUALITY` | `0.70` | 較小檔案 |
 
 #### 推薦組合
 
@@ -180,17 +219,20 @@ View-Only PDF mode dynamically loads [jsPDF](https://github.com/parallax/jsPDF) 
 | 情況 | 結果 |
 |------|------|
 | 擁有者關閉下載（Docs/Sheets/Slides） | Export API 被 Google 封鎖 |
-| DRM 保護的影片 | 腳本會開啟來源 URL，需手動另存 |
+| 影片有 DRM（Widevine）保護 | 無法解密，URL 顯示但無法播放 |
+| HLS 影片串流 | 提供 URL 供 yt-dlp 使用 |
 
 ### 依賴
 
-View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（via unpkg），其餘模式無需任何外部依賴。
+- View-Only PDF 模式：動態載入 [jsPDF](https://github.com/parallax/jsPDF)（via unpkg）
+- 其餘模式：無需任何外部依賴
 
 ### 致謝
 
-- [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — 自動捲動 & 瀏覽器縮放品質技巧
-- [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob 圖片擷取方法
-- [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — 螢幕尺寸渲染與檔案大小優化
+- [zeltox/Google-Drive-PDF-Downloader](https://github.com/zeltox/Google-Drive-PDF-Downloader) — 自動捲動 & 瀏覽器縮放技巧
+- [zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader](https://github.com/zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader) — blob 圖片擷取
+- [mhsohan/How-to-download-protected-view-only-files-from-google-drive-](https://github.com/mhsohan/How-to-download-protected-view-only-files-from-google-drive-) — 螢幕尺寸優化
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 啟發了 XHR/fetch 攔截的設計思路
 
 ---
 
@@ -198,31 +240,76 @@ View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（vi
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.2
+// GDrive Universal Downloader v2.3
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
-//           Images, Video, Audio, and all other Drive-hosted files
+//           Images, Video (yt-dlp style intercept), Audio, and more
 //
-// Quality Tips:
-//   - Zoom browser (Ctrl+/Ctrl-) BEFORE running to control resolution
-//   - Adjust SCALE and QUALITY below for fine-tuning
+// Video strategy inspired by yt-dlp:
+//   Hook XHR + fetch to intercept real stream URLs before they load
 //
 // Credits:
 //   zeltox/Google-Drive-PDF-Downloader (auto-scroll, zoom tip)
 //   zavierferodova/Google-Drive-View-Only-PDF-Script-Downloader (blob capture)
 //   mhsohan/How-to-download-protected-view-only-files-from-google-drive- (display size)
+//   yt-dlp (XHR/fetch intercept concept)
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.2 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.3 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
-  // SCALE: 1.0 = screen size (recommended), 2.0 = full retina
-  // Tip: use browser zoom (Ctrl+/-) instead of SCALE for quality control
-  const SCALE        = 1.0;
-  // QUALITY: 0.0~1.0 JPEG quality (0.82 = balanced, 0.95 = near-lossless)
-  const QUALITY      = 0.82;
-  // SCROLL_DELAY: ms between scroll steps (increase on slow connections)
-  const SCROLL_DELAY = 200;
+  const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
+  const QUALITY      = 0.82;  // PDF JPEG quality (0.0~1.0)
+  const SCROLL_DELAY = 200;   // ms between scroll steps
+
+  // ── Video Stream Interceptor (yt-dlp style) ─────────────────────
+  // Hook XHR and fetch IMMEDIATELY to catch video URLs as they load
+  const capturedVideoURLs = new Set();
+
+  const VIDEO_PATTERNS = [
+    /googlevideo\.com/,
+    /\.m3u8/,
+    /\.mpd/,
+    /videoplayback/,
+    /mime=video/,
+    /itag=\d+/,
+  ];
+
+  const isVideoURL = (url) => VIDEO_PATTERNS.some(p => p.test(url));
+
+  const recordURL = (url) => {
+    if (!url || typeof url !== 'string') return;
+    if (isVideoURL(url)) {
+      if (!capturedVideoURLs.has(url)) {
+        capturedVideoURLs.add(url);
+        console.log('🎯 Captured video URL: ' + url.substring(0, 80) + '...');
+      }
+    }
+  };
+
+  // Hook XMLHttpRequest
+  const OrigXHR = window.XMLHttpRequest;
+  function HookedXHR() {
+    const xhr = new OrigXHR();
+    const origOpen = xhr.open.bind(xhr);
+    xhr.open = function (method, url, ...args) {
+      recordURL(url);
+      return origOpen(method, url, ...args);
+    };
+    return xhr;
+  }
+  HookedXHR.prototype = OrigXHR.prototype;
+  window.XMLHttpRequest = HookedXHR;
+
+  // Hook fetch
+  const origFetch = window.fetch;
+  window.fetch = function (input, ...args) {
+    const url = typeof input === 'string' ? input : input?.url;
+    recordURL(url);
+    return origFetch.apply(this, [input, ...args]);
+  };
+
+  console.log('🪝 XHR/fetch hooks installed — waiting for video requests...');
 
   // ── Utilities ───────────────────────────────────────────────────
 
@@ -273,9 +360,9 @@ View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（vi
     document.body.appendChild(s);
   });
 
-  // Auto-scroll to trigger all lazy-loaded pages (inspired by zeltox)
+  // Auto-scroll to trigger lazy loading
   const autoScroll = async () => {
-    console.log('⏬ Auto-scrolling to load all pages...');
+    console.log('⏬ Auto-scrolling...');
     const scrollable =
       document.querySelector('.ndfHFb-c4YZDc-cYSp0e-DARUcf') ||
       document.querySelector('[role="main"]') ||
@@ -306,64 +393,153 @@ View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（vi
     if (/docs\.google\.com\/forms/i.test(url))        return 'gforms';
     if (/docs\.google\.com\/drawings/i.test(url))     return 'gdrawings';
 
-    if (document.querySelector('video'))   return 'video';
-    if (document.querySelector('audio'))   return 'audio';
+    if (document.querySelector('video'))  return 'video';
+    if (document.querySelector('audio'))  return 'audio';
     if (document.querySelector(
       'img.stretch-fit, #drive-viewer-main-content img, .drive-viewer-content img'
-    ))                                     return 'image';
+    ))                                    return 'image';
     if (document.querySelector(
       '.drive-viewer-text-container, .docs-texteventtarget-iframe, pre'
-    ))                                     return 'text';
+    ))                                    return 'text';
     if (/drive\.google\.com\/file\/d\//i.test(url)) return 'file-export';
 
     return 'unknown';
   };
 
-  // ── Strategy 1: View-Only PDF ───────────────────────────────────
+  // ── Strategy: Video (yt-dlp style) ─────────────────────────────
+  const processVideo = async () => {
+    const title = getTitle();
+
+    // Step 1: Check DOM for direct src
+    const videoEl = document.querySelector('video');
+    const domSrc  = videoEl?.src
+      || videoEl?.querySelector('source[src]')?.src
+      || [...(videoEl?.querySelectorAll('source') || [])].find(s => s.src)?.src;
+
+    if (domSrc && !domSrc.startsWith('blob:')) {
+      console.log('✅ Found direct video URL in DOM');
+      const ext = domSrc.match(/\.(mp4|webm|mov)/i)?.[1] || 'mp4';
+      triggerDownload(domSrc, title + '.' + ext);
+      console.log('🎬 Downloading → ' + title + '.' + ext);
+      return;
+    }
+
+    // Step 2: Check Performance API for already-loaded resources
+    const perfEntries = window.performance
+      .getEntriesByType('resource')
+      .map(e => e.name)
+      .filter(isVideoURL);
+
+    perfEntries.forEach(u => capturedVideoURLs.add(u));
+
+    // Step 3: Wait for XHR/fetch hooks to capture URLs (trigger video play)
+    if (capturedVideoURLs.size === 0) {
+      console.log('⏳ No video URLs captured yet. Triggering playback...');
+      if (videoEl) {
+        videoEl.play().catch(() => {});
+      }
+      // Wait up to 5 seconds for requests to come in
+      for (let i = 0; i < 10; i++) {
+        await sleep(500);
+        if (capturedVideoURLs.size > 0) break;
+        console.log('  ⌛ Waiting... (' + ((i + 1) * 0.5).toFixed(1) + 's)');
+      }
+    }
+
+    if (capturedVideoURLs.size === 0) {
+      console.warn('⚠️ No video stream URLs captured.');
+      console.log(
+        'Try:\n' +
+        '1. Run the script BEFORE the video starts loading (refresh page first)\n' +
+        '2. Right-click the video → "Save video as"\n' +
+        '3. Check Network tab in DevTools for video requests manually'
+      );
+      return;
+    }
+
+    // Step 4: Categorise captured URLs
+    const urls       = [...capturedVideoURLs];
+    const directMp4  = urls.filter(u => /\.(mp4|webm)/i.test(u) || /mime=video/i.test(u));
+    const hlsUrls    = urls.filter(u => /\.m3u8/i.test(u));
+    const dashUrls   = urls.filter(u => /\.mpd/i.test(u));
+    const streamUrls = urls.filter(u => /videoplayback|googlevideo/i.test(u));
+
+    console.log('📊 Captured ' + urls.length + ' video URL(s):');
+    console.log('   Direct MP4/WebM : ' + directMp4.length);
+    console.log('   HLS (.m3u8)     : ' + hlsUrls.length);
+    console.log('   DASH (.mpd)     : ' + dashUrls.length);
+    console.log('   Stream URLs     : ' + streamUrls.length);
+
+    // Step 5: Try to download best available option
+    if (directMp4.length > 0) {
+      // Sort by URL length (longer URLs usually have more quality params)
+      const best = directMp4.sort((a, b) => b.length - a.length)[0];
+      console.log('✅ Direct MP4 found — downloading...');
+      triggerDownload(best, title + '.mp4');
+      console.log('🎬 Downloading → ' + title + '.mp4');
+      return;
+    }
+
+    if (streamUrls.length > 0) {
+      const best = streamUrls.sort((a, b) => b.length - a.length)[0];
+      console.log('✅ Stream URL found — attempting download...');
+      triggerDownload(best, title + '.mp4');
+      console.log('🎬 Downloading → ' + title + '.mp4');
+      return;
+    }
+
+    // Step 6: HLS/DASH — provide yt-dlp command
+    if (hlsUrls.length > 0 || dashUrls.length > 0) {
+      const manifestUrl = (hlsUrls[0] || dashUrls[0]);
+      const type = hlsUrls.length > 0 ? 'HLS (.m3u8)' : 'DASH (.mpd)';
+      console.warn('⚠️ ' + type + ' stream detected — cannot download directly in browser.');
+      console.log('📋 Use yt-dlp to download:');
+      console.log('');
+      console.log('  yt-dlp "' + manifestUrl + '" -o "' + title + '.mp4"');
+      console.log('');
+      console.log('📋 Or ffmpeg:');
+      console.log('  ffmpeg -i "' + manifestUrl + '" -c copy "' + title + '.mp4"');
+      console.log('');
+      console.log('🔗 Manifest URL copied to console — select and copy the line above.');
+      return;
+    }
+
+    // Fallback: show all captured URLs
+    console.log('📋 All captured URLs:');
+    urls.forEach((u, i) => console.log('  [' + i + '] ' + u));
+    console.log('Copy the most relevant URL and use with yt-dlp or your browser downloader.');
+  };
+
+  // ── Strategy: View-Only PDF ─────────────────────────────────────
   const processBlobPDF = async () => {
     await autoScroll();
-
     const blobImgs = [...document.getElementsByTagName('img')]
       .filter(img => img.src.startsWith('blob:https://drive.google.com/'));
 
     if (blobImgs.length === 0) {
-      console.error('❌ No page images found even after scrolling.');
-      console.log('👉 Try manually scrolling to the bottom of the PDF, then run again.');
+      console.error('❌ No page images found. Scroll to the bottom manually and try again.');
       return;
     }
 
     await loadScript('https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js');
     const { jsPDF } = window.jspdf;
-
-    const zoom = window.devicePixelRatio || 1;
-    console.log('📄 Found ' + blobImgs.length + ' pages');
-    console.log('   Browser zoom: ~' + Math.round((window.outerWidth / window.innerWidth) * 100) + '%'
-      + '  SCALE: ' + SCALE + '  QUALITY: ' + QUALITY);
+    console.log('📄 Found ' + blobImgs.length + ' pages — SCALE:' + SCALE + ' QUALITY:' + QUALITY);
 
     let pdf = null;
-
     for (let i = 0; i < blobImgs.length; i++) {
       const img = blobImgs[i];
-
-      // Use display size × SCALE (not naturalWidth) — keeps file size manageable
-      // Browser zoom already affects img.width, so zooming browser = free quality boost
-      const w = Math.round(img.width  * SCALE);
-      const h = Math.round(img.height * SCALE);
-
+      const w   = Math.round(img.width  * SCALE);
+      const h   = Math.round(img.height * SCALE);
       const canvas = document.createElement('canvas');
-      canvas.width  = w;
-      canvas.height = h;
+      canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-
       const imgData     = canvas.toDataURL('image/jpeg', QUALITY);
       const orientation = w > h ? 'l' : 'p';
-
       if (i === 0) {
         pdf = new jsPDF({ orientation, unit: 'px', format: [w, h] });
       } else {
         pdf.addPage([w, h], orientation);
       }
-
       pdf.addImage(imgData, 'JPEG', 0, 0, w, h, '', 'FAST');
       console.log('  🖼️ Page ' + (i + 1) + '/' + blobImgs.length
         + ' (' + Math.floor((i + 1) / blobImgs.length * 100) + '%)');
@@ -383,7 +559,8 @@ View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（vi
 
   console.log('🔍 Detected: ' + type + ' | File: ' + title);
 
-  if (type === 'blob-pdf') { processBlobPDF(); return; }
+  if (type === 'blob-pdf')  { processBlobPDF(); return; }
+  if (type === 'video')     { processVideo();   return; }
 
   if (type === 'gdoc') {
     const id = getId(); if (!id) { console.error('Cannot get document ID'); return; }
@@ -415,15 +592,6 @@ View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（vi
     console.log('🎨 Downloading → ' + title + '.svg'); return;
   }
 
-  if (type === 'video') {
-    const video = document.querySelector('video');
-    const src   = video?.src || video?.querySelector('source[src]')?.src
-      || [...(video?.querySelectorAll('source') || [])].find(s => s.src)?.src;
-    if (!src) { console.warn('⚠️ Cannot get video URL. Right-click → Save video as'); return; }
-    console.log('🎬 Opening video in new tab → right-click to save');
-    window.open(src, '_blank'); return;
-  }
-
   if (type === 'audio') {
     const audio = document.querySelector('audio');
     const src   = audio?.src || audio?.querySelector('source[src]')?.src;
@@ -447,9 +615,8 @@ View-Only PDF 模式動態載入 [jsPDF](https://github.com/parallax/jsPDF)（vi
     const el      = document.querySelector('.drive-viewer-text-container, pre');
     const content = el?.innerText ?? document.body.innerText;
     const blob    = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const tExt    = ext || 'txt';
-    triggerDownload(URL.createObjectURL(blob), title + '.' + tExt);
-    console.log('📋 Downloading → ' + title + '.' + tExt); return;
+    triggerDownload(URL.createObjectURL(blob), title + '.' + (ext || 'txt'));
+    console.log('📋 Downloading → ' + title + '.' + (ext || 'txt')); return;
   }
 
   if (type === 'file-export') {

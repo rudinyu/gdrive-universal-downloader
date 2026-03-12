@@ -36,18 +36,16 @@ A browser Console script that auto-detects Google Drive file types and applies t
 4. If Chrome shows a paste warning, type `allow pasting` and press Enter first
 5. Paste the script below and press **Enter** — it will auto-scroll and download
 
-**Video (yt-dlp style) — Google Drive & YouTube**
+**Video — Google Drive & YouTube (direct browser download)**
 
-The script intercepts network requests to find the real video stream URL — similar to how yt-dlp works:
-
-1. Open the Google Drive video page **or YouTube watch page**
+1. Open the Google Drive video page or **YouTube watch page**
 2. Open Console (`F12`)
-3. Paste and run the script **before or right as the video starts loading**
-4. The script hooks into XHR/fetch to capture stream URLs automatically
-5. If a direct `.mp4` is found → auto-downloads
-6. If HLS/DASH/videoplayback stream is found → displays yt-dlp command
+3. Paste and run the script
+4. For YouTube: script reads `ytInitialPlayerResponse` to get all available stream URLs
+5. **Best muxed quality auto-downloads immediately** (up to 720p, video+audio in one file)
+6. To pick a specific quality, run `__gdriveDownloadStream(N)` in Console after the list appears
 
-> ⚠️ **YouTube tip**: Run the script right after the page loads, before pressing play — the hooks need to be in place before YouTube starts streaming.
+> **YouTube quality note**: Muxed streams (direct download) go up to **720p**. For 1080p+ you need yt-dlp since those streams have separate video/audio tracks that require merging.
 
 **All other formats**
 
@@ -154,18 +152,16 @@ yt-dlp "https://..." -o "filename.mp4"
 4. 若 Chrome 提示無法貼上，先輸入 `allow pasting` 按 Enter
 5. 貼上腳本按 **Enter**，腳本會自動捲動並下載
 
-**影片（yt-dlp 風格）— Google Drive & YouTube**
+**影片 — Google Drive & YouTube（瀏覽器直接下載）**
 
-腳本攔截網路請求來找到真正的影片串流 URL，原理與 yt-dlp 相同：
-
-1. 開啟 Google Drive 影片頁面**或 YouTube 觀看頁面**
+1. 開啟 Google Drive 影片頁面或 **YouTube 觀看頁面**
 2. 開啟 Console（`F12`）
-3. 在影片**載入時或載入前**貼上並執行腳本
-4. 腳本自動 hook XHR/fetch 捕捉串流 URL
-5. 找到直接 `.mp4` → 自動下載
-6. 找到 HLS/DASH/videoplayback 串流 → 顯示 yt-dlp 指令
+3. 貼上並執行腳本
+4. YouTube：腳本從 `ytInitialPlayerResponse` 讀取所有可用串流 URL
+5. **最佳畫質自動開始下載**（最高 720p，影音合一檔案）
+6. 若要選擇其他畫質，在 Console 執行 `__gdriveDownloadStream(N)` 即可
 
-> ⚠️ **YouTube 提示**：頁面載入後立即執行腳本，不要先按播放 — hook 需要在 YouTube 開始串流前就安裝好。
+> **YouTube 畫質說明**：可直接下載的合併串流最高到 **720p**。1080p 以上需要 yt-dlp，因為那些串流的影像和音訊是分開的，需要額外合併。
 
 **其他格式**
 
@@ -415,7 +411,93 @@ yt-dlp "https://..." -o "filename.mp4"
   const processVideo = async () => {
     const title = getTitle();
 
-    // Step 1: Check DOM for direct src
+    // ── YouTube: extract streams from ytInitialPlayerResponse ──────
+    // YouTube embeds all stream URLs directly in the page JS object.
+    // `formats` = muxed video+audio (up to 720p), downloadable as single file.
+    // `adaptiveFormats` = separate video/audio tracks (1080p+), need merging.
+    if (/youtube\.com\/watch|youtu\.be\//i.test(url)) {
+      console.log('📺 YouTube detected — scanning stream URLs...');
+
+      const playerResponse = window.ytInitialPlayerResponse
+        || window.ytplayer?.config?.args?.raw_player_response;
+
+      if (!playerResponse?.streamingData) {
+        console.error('❌ Cannot find ytInitialPlayerResponse. Try refreshing the page and running the script again.');
+        return;
+      }
+
+      const formats         = playerResponse.streamingData.formats         || [];
+      const adaptiveFormats = playerResponse.streamingData.adaptiveFormats || [];
+
+      // Muxed streams (video + audio combined) — directly downloadable
+      const muxed = formats
+        .filter(f => f.url && f.mimeType?.startsWith('video'))
+        .sort((a, b) => (b.height || 0) - (a.height || 0));
+
+      // Adaptive video-only streams (higher quality but audio separate)
+      const videoOnly = adaptiveFormats
+        .filter(f => f.url && f.mimeType?.startsWith('video'))
+        .sort((a, b) => (b.height || 0) - (a.height || 0));
+
+      // Audio-only streams
+      const audioOnly = adaptiveFormats
+        .filter(f => f.url && f.mimeType?.startsWith('audio'))
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+
+      console.log('📊 Available streams:');
+      console.log('   Muxed (video+audio, direct download):');
+      muxed.forEach((f, i) => {
+        const ext  = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
+        const size = f.contentLength ? ' ~' + (f.contentLength / 1024 / 1024).toFixed(1) + 'MB' : '';
+        console.log('   [' + i + '] ' + (f.height || '?') + 'p  ' + ext + size);
+      });
+
+      if (videoOnly.length > 0) {
+        console.log('   Adaptive video-only (needs audio merge — use yt-dlp for 1080p+):');
+        videoOnly.slice(0, 3).forEach((f, i) => {
+          const ext = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
+          console.log('   [v' + i + '] ' + (f.height || '?') + 'p  ' + ext);
+        });
+      }
+
+      if (muxed.length === 0) {
+        console.warn('⚠️ No directly downloadable streams found (may be age-restricted or private).');
+        console.log('👉 Use yt-dlp instead:');
+        console.log('   yt-dlp "' + url + '" -o "' + title + '.mp4"');
+        return;
+      }
+
+      // Show quality picker in console
+      console.log('');
+      console.log('👆 Choose a quality — run one of these in Console:');
+      muxed.forEach((f, i) => {
+        const ext  = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
+        const res  = (f.height || 'unknown') + 'p';
+        console.log('  // ' + res);
+        console.log('  __gdriveDownloadStream(' + i + ')');
+      });
+      console.log('');
+
+      // Expose picker function globally
+      window.__gdriveDownloadStream = (index) => {
+        const f   = muxed[index];
+        if (!f) { console.error('Invalid index'); return; }
+        const ext = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
+        const res = (f.height || 'unknown') + 'p';
+        const filename = title + '_' + res + '.' + ext;
+        console.log('⬇️ Downloading: ' + filename);
+        triggerDownload(f.url, filename);
+      };
+
+      // Auto-download best muxed quality (highest resolution)
+      console.log('✅ Auto-downloading best available muxed quality: ' + (muxed[0].height || '?') + 'p');
+      console.log('   (Run __gdriveDownloadStream(N) to pick a different quality)');
+      const best    = muxed[0];
+      const bestExt = best.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
+      const bestRes = (best.height || 'best') + 'p';
+      triggerDownload(best.url, title + '_' + bestRes + '.' + bestExt);
+      return;
+    }
     const videoEl = document.querySelector('video');
     const domSrc  = videoEl?.src
       || videoEl?.querySelector('source[src]')?.src

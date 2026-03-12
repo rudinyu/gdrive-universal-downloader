@@ -36,16 +36,18 @@ A browser Console script that auto-detects Google Drive file types and applies t
 4. If Chrome shows a paste warning, type `allow pasting` and press Enter first
 5. Paste the script below and press **Enter** — it will auto-scroll and download
 
-**Video (yt-dlp style)**
+**Video (yt-dlp style) — Google Drive & YouTube**
 
 The script intercepts network requests to find the real video stream URL — similar to how yt-dlp works:
 
-1. Open the Google Drive video page
+1. Open the Google Drive video page **or YouTube watch page**
 2. Open Console (`F12`)
-3. Paste and run the script **before** or **while** the video is loading
+3. Paste and run the script **before or right as the video starts loading**
 4. The script hooks into XHR/fetch to capture stream URLs automatically
 5. If a direct `.mp4` is found → auto-downloads
-6. If an HLS `.m3u8` stream is found → displays the URL for use with yt-dlp
+6. If HLS/DASH/videoplayback stream is found → displays yt-dlp command
+
+> ⚠️ **YouTube tip**: Run the script right after the page loads, before pressing play — the hooks need to be in place before YouTube starts streaming.
 
 **All other formats**
 
@@ -152,16 +154,18 @@ yt-dlp "https://..." -o "filename.mp4"
 4. 若 Chrome 提示無法貼上，先輸入 `allow pasting` 按 Enter
 5. 貼上腳本按 **Enter**，腳本會自動捲動並下載
 
-**影片（yt-dlp 風格）**
+**影片（yt-dlp 風格）— Google Drive & YouTube**
 
 腳本攔截網路請求來找到真正的影片串流 URL，原理與 yt-dlp 相同：
 
-1. 開啟 Google Drive 影片頁面
+1. 開啟 Google Drive 影片頁面**或 YouTube 觀看頁面**
 2. 開啟 Console（`F12`）
 3. 在影片**載入時或載入前**貼上並執行腳本
 4. 腳本自動 hook XHR/fetch 捕捉串流 URL
 5. 找到直接 `.mp4` → 自動下載
-6. 找到 HLS `.m3u8` 串流 → 顯示 URL 供 yt-dlp 使用
+6. 找到 HLS/DASH/videoplayback 串流 → 顯示 yt-dlp 指令
+
+> ⚠️ **YouTube 提示**：頁面載入後立即執行腳本，不要先按播放 — hook 需要在 YouTube 開始串流前就安裝好。
 
 **其他格式**
 
@@ -393,6 +397,7 @@ yt-dlp "https://..." -o "filename.mp4"
     if (/docs\.google\.com\/forms/i.test(url))        return 'gforms';
     if (/docs\.google\.com\/drawings/i.test(url))     return 'gdrawings';
 
+    if (/youtube\.com\/watch|youtu\.be\//i.test(url)) return 'video';
     if (document.querySelector('video'))  return 'video';
     if (document.querySelector('audio'))  return 'audio';
     if (document.querySelector(
@@ -438,11 +443,11 @@ yt-dlp "https://..." -o "filename.mp4"
       if (videoEl) {
         videoEl.play().catch(() => {});
       }
-      // Wait up to 5 seconds for requests to come in
-      for (let i = 0; i < 10; i++) {
+      // Wait up to 8 seconds — YouTube may take longer to start streaming
+      for (let i = 0; i < 16; i++) {
         await sleep(500);
         if (capturedVideoURLs.size > 0) break;
-        console.log('  ⌛ Waiting... (' + ((i + 1) * 0.5).toFixed(1) + 's)');
+        if (i % 2 === 1) console.log('  ⌛ Waiting... (' + ((i + 1) * 0.5).toFixed(1) + 's)');
       }
     }
 

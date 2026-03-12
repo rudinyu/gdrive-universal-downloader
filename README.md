@@ -419,7 +419,38 @@ yt-dlp "https://..." -o "filename.mp4"
       console.log('📺 YouTube detected — scanning stream URLs...');
 
       const playerResponse = window.ytInitialPlayerResponse
-        || window.ytplayer?.config?.args?.raw_player_response;
+        || window.ytplayer?.config?.args?.raw_player_response
+        || (() => {
+          // String-aware JSON extractor — correctly skips { } inside string values
+          const extractJSON = (text, startIdx) => {
+            let depth = 0, inString = false, escape = false;
+            for (let i = startIdx; i < text.length; i++) {
+              const c = text[i];
+              if (escape)               { escape = false; continue; }
+              if (c === '\\' && inString) { escape = true;  continue; }
+              if (c === '"')            { inString = !inString; continue; }
+              if (inString)             { continue; }
+              if (c === '{')            { depth++; }
+              else if (c === '}')       { depth--; if (depth === 0) return text.substring(startIdx, i + 1); }
+            }
+            return null;
+          };
+
+          const scripts = [...document.querySelectorAll('script')];
+          for (const s of scripts) {
+            if (!s.textContent.includes('ytInitialPlayerResponse')) continue;
+            const start  = s.textContent.indexOf('ytInitialPlayerResponse');
+            const eqIdx  = s.textContent.indexOf('=', start);
+            if (eqIdx === -1) continue;
+            let jsonStart = eqIdx + 1;
+            while (jsonStart < s.textContent.length && /\s/.test(s.textContent[jsonStart])) jsonStart++;
+            if (s.textContent[jsonStart] !== '{') continue;
+            const json = extractJSON(s.textContent, jsonStart);
+            if (!json) continue;
+            try { return JSON.parse(json); } catch (_) { continue; }
+          }
+          return null;
+        })();
 
       if (!playerResponse?.streamingData) {
         console.error('❌ Cannot find ytInitialPlayerResponse. Try refreshing the page and running the script again.');

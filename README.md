@@ -460,73 +460,89 @@ yt-dlp "https://..." -o "filename.mp4"
       const formats         = playerResponse.streamingData.formats         || [];
       const adaptiveFormats = playerResponse.streamingData.adaptiveFormats || [];
 
-      // Muxed streams (video + audio combined) — directly downloadable
+      // Muxed streams (video + audio combined) — for reference only
       const muxed = formats
         .filter(f => f.url && f.mimeType?.startsWith('video'))
         .sort((a, b) => (b.height || 0) - (a.height || 0));
 
-      // Adaptive video-only streams (higher quality but audio separate)
-      const videoOnly = adaptiveFormats
-        .filter(f => f.url && f.mimeType?.startsWith('video'))
-        .sort((a, b) => (b.height || 0) - (a.height || 0));
-
-      // Audio-only streams
-      const audioOnly = adaptiveFormats
-        .filter(f => f.url && f.mimeType?.startsWith('audio'))
-        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-
-      console.log('📊 Available streams:');
-      console.log('   Muxed (video+audio, direct download):');
-      muxed.forEach((f, i) => {
-        const ext  = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
-        const size = f.contentLength ? ' ~' + (f.contentLength / 1024 / 1024).toFixed(1) + 'MB' : '';
-        console.log('   [' + i + '] ' + (f.height || '?') + 'p  ' + ext + size);
-      });
-
-      if (videoOnly.length > 0) {
-        console.log('   Adaptive video-only (needs audio merge — use yt-dlp for 1080p+):');
-        videoOnly.slice(0, 3).forEach((f, i) => {
-          const ext = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
-          console.log('   [v' + i + '] ' + (f.height || '?') + 'p  ' + ext);
-        });
+      if (muxed.length > 0) {
+        console.log('📊 Available muxed streams (for reference): '
+          + muxed.map(f => f.height + 'p').join(', '));
       }
 
-      if (muxed.length === 0) {
-        console.warn('⚠️ No directly downloadable streams found (may be age-restricted or private).');
-        console.log('👉 Use yt-dlp instead:');
-        console.log('   yt-dlp "' + url + '" -o "' + title + '.mp4"');
+      // YouTube videoplayback URLs are signed to cookies/IP — fetch() always 403.
+      // Instead, capture the stream directly from the <video> element via MediaRecorder.
+      const videoEl = document.querySelector('video');
+      if (!videoEl) {
+        console.error('❌ No <video> element found. Make sure the video is playing.');
         return;
       }
 
-      // Show quality picker in console
-      console.log('');
-      console.log('👆 Choose a quality — run one of these in Console:');
-      muxed.forEach((f, i) => {
-        const ext  = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
-        const res  = (f.height || 'unknown') + 'p';
-        console.log('  // ' + res);
-        console.log('  __gdriveDownloadStream(' + i + ')');
-      });
-      console.log('');
+      let stream;
+      try {
+        stream = videoEl.captureStream?.() || videoEl.mozCaptureStream?.();
+      } catch(e) {
+        console.error('❌ captureStream() failed:', e.message);
+        return;
+      }
+      if (!stream) {
+        console.error('❌ captureStream() not supported in this browser. Try Chrome.');
+        return;
+      }
 
-      // Expose picker function globally
-      window.__gdriveDownloadStream = (index) => {
-        const f   = muxed[index];
-        if (!f) { console.error('Invalid index'); return; }
-        const ext = f.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
-        const res = (f.height || 'unknown') + 'p';
-        const filename = title + '_' + res + '.' + ext;
-        console.log('⬇️ Downloading: ' + filename);
-        triggerDownload(f.url, filename);
+      // Pick best supported codec
+      const mimeType = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+        .find(t => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks   = [];
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        const blob    = new Blob(chunks, { type: mimeType });
+        const ext     = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl; a.download = title + '.' + ext;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        const mb = (blob.size / 1024 / 1024).toFixed(1);
+        console.log('✅ Downloaded: ' + title + '.' + ext + ' (' + mb + ' MB)');
       };
 
-      // Auto-download best muxed quality (highest resolution)
-      console.log('✅ Auto-downloading best available muxed quality: ' + (muxed[0].height || '?') + 'p');
-      console.log('   (Run __gdriveDownloadStream(N) to pick a different quality)');
-      const best    = muxed[0];
-      const bestExt = best.mimeType.match(/video\/(\w+)/)?.[1] || 'mp4';
-      const bestRes = (best.height || 'best') + 'p';
-      triggerDownload(best.url, title + '_' + bestRes + '.' + bestExt);
+      // Make sure video is playing so MediaRecorder gets data
+      videoEl.play().catch(() => {});
+      recorder.start(1000); // collect data every 1s
+
+      const duration = videoEl.duration || 0;
+      const remaining = Math.max(0, (duration - videoEl.currentTime));
+
+      console.log('🔴 Recording started (' + mimeType + ')');
+      if (duration > 0) {
+        console.log('   Video length: ' + Math.round(duration) + 's');
+        console.log('   Recording from current position — ' + Math.round(remaining) + 's remaining');
+        console.log('   ⚠️  Do not close or navigate away from this tab!');
+        console.log('   Run  __stopRecording()  at any time to stop early and download.');
+      } else {
+        console.log('   Duration unknown — run  __stopRecording()  when done watching.');
+      }
+
+      // Expose stop function
+      window.__stopRecording = () => {
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+          console.log('⏹ Recording stopped — preparing download...');
+        }
+      };
+
+      // Auto-stop when video ends
+      videoEl.addEventListener('ended', () => {
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+          console.log('⏹ Video ended — preparing download...');
+        }
+      }, { once: true });
+
       return;
     }
     const videoEl = document.querySelector('video');

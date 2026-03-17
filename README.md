@@ -43,7 +43,7 @@ A browser Console script that auto-detects Google Drive file types and applies t
 3. Paste and run the script
 4. For YouTube: script starts **MediaRecorder** on the `<video>` element and records the live stream
 5. Video plays automatically — **do not close or navigate away**
-6. File downloads automatically when the video ends, or run `__stopRecording()` to stop early
+6. File downloads automatically when the video ends, or run `__gdrive_stopRecording()` to stop early
 
 > **YouTube quality note**: The recorded quality matches whatever YouTube is currently streaming — usually 360p–720p depending on your connection and YouTube's ABR selection.
 
@@ -63,7 +63,7 @@ MediaRecorder.captureStream(<video>)
 Records live stream in real-time
         │
         ▼
-Video ends / __stopRecording() called
+Video ends / __gdrive_stopRecording() called
         │
         ▼
 Blob → auto-download (.webm / .mp4)
@@ -160,7 +160,7 @@ Blob → auto-download (.webm / .mp4)
 3. 貼上並執行腳本
 4. YouTube：腳本對 `<video>` 元素啟動 **MediaRecorder**，即時錄製串流
 5. 影片自動播放 — **不要關閉或離開此頁面**
-6. 影片結束時自動下載，或執行 `__stopRecording()` 提前停止
+6. 影片結束時自動下載，或執行 `__gdrive_stopRecording()` 提前停止
 
 > **YouTube 畫質說明**：錄製品質取決於 YouTube 當前串流畫質，通常為 360p–720p（依網路速度和 YouTube ABR 決定）。
 
@@ -180,7 +180,7 @@ MediaRecorder.captureStream(<video>)
 即時錄製串流
         │
         ▼
-影片結束 / 執行 __stopRecording()
+影片結束 / 執行 __gdrive_stopRecording()
         │
         ▼
 Blob → 自動下載（.webm / .mp4）
@@ -242,7 +242,7 @@ Blob → 自動下載（.webm / .mp4）
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.5
+// GDrive Universal Downloader v2.6
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
 //           Images, Video (MediaRecorder capture), Audio, and more
 //
@@ -257,29 +257,31 @@ Blob → 自動下載（.webm / .mp4）
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.5 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.6 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
   const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
   const QUALITY      = 0.82;  // PDF JPEG quality (0.0~1.0)
   const SCROLL_DELAY = 200;   // ms between scroll steps
+  const JSPDF_URL    = 'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js';
+
+  // ── Video URL detection (shared across interceptor + processVideo) ──
+  const VIDEO_PATTERNS = [
+    /googlevideo\.com/,
+    /\.m3u8/,
+    /\.mpd/,
+    /videoplayback/,
+    /mime=video/,
+    /itag=\d+/,
+  ];
+  const isVideoURL = (url) => VIDEO_PATTERNS.some(p => p.test(url));
 
   // ── Video Stream Interceptor (Google Drive only) ────────────────
   // Skip hooks on YouTube — we use ytInitialPlayerResponse instead
   const capturedVideoURLs = new Set();
+  let _origXHR, _origFetch;
 
   if (!/youtube\.com|youtu\.be/i.test(window.location.href)) {
-    const VIDEO_PATTERNS = [
-      /googlevideo\.com/,
-      /\.m3u8/,
-      /\.mpd/,
-      /videoplayback/,
-      /mime=video/,
-      /itag=\d+/,
-    ];
-
-    const isVideoURL = (url) => VIDEO_PATTERNS.some(p => p.test(url));
-
     const recordURL = (url) => {
       if (!url || typeof url !== 'string') return;
       if (isVideoURL(url) && !capturedVideoURLs.has(url)) {
@@ -288,7 +290,8 @@ Blob → 自動下載（.webm / .mp4）
       }
     };
 
-    const OrigXHR = window.XMLHttpRequest;
+    _origXHR = window.XMLHttpRequest;
+    const OrigXHR = _origXHR;
     function HookedXHR() {
       const xhr = new OrigXHR();
       const origOpen = xhr.open.bind(xhr);
@@ -299,13 +302,16 @@ Blob → 自動下載（.webm / .mp4）
       return xhr;
     }
     HookedXHR.prototype = OrigXHR.prototype;
+    Object.defineProperty(HookedXHR, Symbol.hasInstance, {
+      value: (instance) => instance instanceof OrigXHR,
+    });
     window.XMLHttpRequest = HookedXHR;
 
-    const origFetch = window.fetch;
+    _origFetch = window.fetch;
     window.fetch = function (input, ...args) {
       const url = typeof input === 'string' ? input : input?.url;
       recordURL(url);
-      return origFetch.apply(this, [input, ...args]);
+      return _origFetch.apply(this, [input, ...args]);
     };
 
     console.log('🪝 XHR/fetch hooks installed for Drive video detection');
@@ -313,15 +319,30 @@ Blob → 自動下載（.webm / .mp4）
     console.log('📺 YouTube page — skipping XHR hooks, using ytInitialPlayerResponse instead');
   }
 
+  const restoreHooks = () => {
+    if (_origXHR)   { window.XMLHttpRequest = _origXHR; _origXHR = null; }
+    if (_origFetch)  { window.fetch = _origFetch; _origFetch = null; }
+  };
+
   // ── Utilities ───────────────────────────────────────────────────
+
+  const sanitizeFilename = (name) => {
+    return name
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')  // illegal filesystem chars
+      .replace(/\.\.+/g, '.')                     // path traversal
+      .replace(/^\.+|\.+$/g, '')                  // leading/trailing dots
+      .substring(0, 200)                          // limit length
+      .trim() || 'gdrive-file';
+  };
 
   const getTitle = () => {
     const meta = document.querySelector('meta[itemprop="name"]')?.content;
     const raw  = meta || document.title;
-    return raw
+    const name = raw
       .replace(/\s*[-–—]\s*Google.*/i, '')
       .replace(/\.\w{2,5}$/, '')
       .trim() || 'gdrive-file';
+    return sanitizeFilename(name);
   };
 
   const getTitleExt = () => {
@@ -333,7 +354,7 @@ Blob → 自動下載（.webm / .mp4）
 
   const triggerDownload = (url, filename) => {
     const a = document.createElement('a');
-    a.href = url; a.download = filename;
+    a.href = url; a.download = sanitizeFilename(filename);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -341,13 +362,23 @@ Blob → 自動下載（.webm / .mp4）
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+  const ALLOWED_SCRIPT_URLS = [JSPDF_URL];
+
   const loadScript = (src) => new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    if (!ALLOWED_SCRIPT_URLS.includes(src)) {
+      reject(new Error('Blocked loading untrusted script: ' + src));
+      return;
+    }
+    const existing = [...document.querySelectorAll('script')].find(s => s.src === src);
+    if (existing) { resolve(); return; }
     let trustedSrc = src;
     if (window.trustedTypes) {
       try {
         const policy = trustedTypes.createPolicy('gdrivePolicy', {
-          createScriptURL: (input) => input,
+          createScriptURL: (input) => {
+            if (ALLOWED_SCRIPT_URLS.includes(input)) return input;
+            throw new TypeError('Blocked untrusted script URL: ' + input);
+          },
         });
         trustedSrc = policy.createScriptURL(src);
       } catch (e) {
@@ -513,25 +544,29 @@ Blob → 自動下載（.webm / .mp4）
           const blob    = new Blob(chunks, { type: 'video/webm' });
           const mb      = (blob.size / 1024 / 1024).toFixed(1);
           const blobUrl = URL.createObjectURL(blob);
+          const fname   = sanitizeFilename(title + '.webm');
 
           // Method 1: <a> click
           const a = document.createElement('a');
           a.href = blobUrl;
-          a.download = title + '.webm';
+          a.download = fname;
           a.style.display = 'none';
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
 
-          // Method 2: fallback — open blob in new tab so user can save manually
-          setTimeout(() => {
-            const stillNeedsDownload = !document.querySelector('a[download]');
+          // Method 2: fallback — only open blob in new tab if download likely failed
+          const checkFallback = setTimeout(() => {
             window.open(blobUrl, '_blank');
             console.log('💾 If download did not start automatically, save the file from the new tab (Ctrl+S / Cmd+S)');
-          }, 1000);
+          }, 3000);
 
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-          console.log('✅ Recording complete: ' + title + '.webm (' + mb + ' MB)');
+          // Listen for download start to cancel fallback
+          window.addEventListener('beforeunload', () => clearTimeout(checkFallback), { once: true });
+
+          // Revoke blob URL after 5 minutes to free memory
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 300000);
+          console.log('✅ Recording complete: ' + fname + ' (' + mb + ' MB)');
           console.log('   Download should start automatically. If not, a new tab will open — press Cmd+S to save.');
         }, 300);
       };
@@ -548,9 +583,9 @@ Blob → 自動下載（.webm / .mp4）
         console.log('   Video length: ' + Math.round(duration) + 's');
         console.log('   Recording from current position — ' + Math.round(remaining) + 's remaining');
         console.log('   ⚠️  Do not close or navigate away from this tab!');
-        console.log('   Run  __stopRecording()  at any time to stop early and download.');
+        console.log('   Run  __gdrive_stopRecording()  at any time to stop early and download.');
       } else {
-        console.log('   Duration unknown — run  __stopRecording()  when done watching.');
+        console.log('   Duration unknown — run  __gdrive_stopRecording()  when done watching.');
       }
 
       const doStop = () => {
@@ -558,12 +593,15 @@ Blob → 自動下載（.webm / .mp4）
         recorder.requestData(); // flush any buffered data before stopping
         setTimeout(() => {
           recorder.stop();
+          delete window.__gdrive_stopRecording;
           console.log('⏹ Recording stopped — preparing download...');
         }, 200);
       };
 
-      // Expose stop function
-      window.__stopRecording = doStop;
+      // Expose stop function with non-writable descriptor to prevent tampering
+      Object.defineProperty(window, '__gdrive_stopRecording', {
+        value: doStop, writable: false, configurable: true,
+      });
 
       // Auto-stop when video ends
       videoEl.addEventListener('ended', doStop, { once: true });
@@ -580,6 +618,7 @@ Blob → 自動下載（.webm / .mp4）
       const ext = domSrc.match(/\.(mp4|webm|mov)/i)?.[1] || 'mp4';
       triggerDownload(domSrc, title + '.' + ext);
       console.log('🎬 Downloading → ' + title + '.' + ext);
+      restoreHooks();
       return;
     }
 
@@ -613,6 +652,7 @@ Blob → 自動下載（.webm / .mp4）
         '2. Right-click the video → "Save video as"\n' +
         '3. Check Network tab in DevTools for video requests manually'
       );
+      restoreHooks();
       return;
     }
 
@@ -636,6 +676,7 @@ Blob → 自動下載（.webm / .mp4）
       console.log('✅ Direct MP4 found — downloading...');
       triggerDownload(best, title + '.mp4');
       console.log('🎬 Downloading → ' + title + '.mp4');
+      restoreHooks();
       return;
     }
 
@@ -652,12 +693,15 @@ Blob → 自動下載（.webm / .mp4）
                                'Stream (videoplayback)';
       console.warn('⚠️ ' + streamType + ' detected — segmented stream, cannot download directly in browser.');
       console.log('💡 Use a browser extension like "Video DownloadHelper" to capture this stream.');
+      restoreHooks();
       return;
     }
 
     // Fallback: show all captured URLs
     console.log('📋 All captured URLs:');
     urls.forEach((u, i) => console.log('  [' + i + '] ' + u));
+
+    restoreHooks();
   };
 
   // ── Strategy: View-Only PDF ─────────────────────────────────────
@@ -671,7 +715,7 @@ Blob → 自動下載（.webm / .mp4）
       return;
     }
 
-    await loadScript('https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js');
+    await loadScript(JSPDF_URL);
     const { jsPDF } = window.jspdf;
     console.log('📄 Found ' + blobImgs.length + ' pages — SCALE:' + SCALE + ' QUALITY:' + QUALITY);
 

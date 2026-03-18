@@ -28,6 +28,8 @@ A browser Console script that auto-detects Google Drive file types and applies t
 
 ### Usage
 
+> 🛡️ **Security Note**: Never paste code into your browser console unless you understand what it does. This script is open-source and runs entirely locally. It does not exfiltrate data, but we recommend you review the code before use.
+
 **View-Only PDF**
 
 1. Open the Google Drive PDF link in **Chrome** or **Edge**
@@ -110,7 +112,7 @@ Blob → auto-download (.webm / .mp4)
 
 ### Dependencies
 
-- View-Only PDF mode: dynamically loads [jsPDF](https://github.com/parallax/jsPDF) via unpkg
+- View-Only PDF mode: dynamically loads [jsPDF](https://github.com/parallax/jsPDF) via unpkg (SRI protected)
 - All other strategies: no external dependencies
 
 ### Credits
@@ -125,6 +127,8 @@ Blob → auto-download (.webm / .mp4)
 ## 🇹🇼 中文
 
 > ⚠️ **合法使用提醒**：本腳本僅供用於您本人擁有或已獲授權存取的文件。請遵守著作權及 Google 服務條款。
+
+> 🛡️ **安全提醒**：除非您了解其運作方式，否則請勿隨意將程式碼貼入瀏覽器控制台（Console）。本腳本為開源專案，完全在本地端執行，不會外洩您的資料，但在執行前建議您先審閱程式碼。
 
 一段瀏覽器 Console 腳本，自動偵測 Google Drive 檔案類型，選擇最佳下載策略。
 
@@ -227,7 +231,7 @@ Blob → 自動下載（.webm / .mp4）
 
 ### 依賴
 
-- View-Only PDF 模式：動態載入 [jsPDF](https://github.com/parallax/jsPDF)（via unpkg）
+- View-Only PDF 模式：動態載入 [jsPDF](https://github.com/parallax/jsPDF)（via unpkg，受 SRI 保護）
 - 其餘模式：無需任何外部依賴
 
 ### 致謝
@@ -264,6 +268,7 @@ Blob → 自動下載（.webm / .mp4）
   const QUALITY      = 0.82;  // PDF JPEG quality (0.0~1.0)
   const SCROLL_DELAY = 200;   // ms between scroll steps
   const JSPDF_URL    = 'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js';
+  const JSPDF_SRI    = 'sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/';
 
   // ── Video URL detection (shared across interceptor + processVideo) ──
   const VIDEO_PATTERNS = [
@@ -364,7 +369,7 @@ Blob → 自動下載（.webm / .mp4）
 
   const ALLOWED_SCRIPT_URLS = [JSPDF_URL];
 
-  const loadScript = (src) => new Promise((resolve, reject) => {
+  const loadScript = (src, sri) => new Promise((resolve, reject) => {
     if (!ALLOWED_SCRIPT_URLS.includes(src)) {
       reject(new Error('Blocked loading untrusted script: ' + src));
       return;
@@ -388,6 +393,10 @@ Blob → 自動下載（.webm / .mp4）
     }
     const s = document.createElement('script');
     s.src = trustedSrc;
+    if (sri) {
+      s.integrity = sri;
+      s.crossOrigin = 'anonymous';
+    }
     s.onload = resolve;
     s.onerror = () => reject(new Error('Failed to load: ' + src));
     document.body.appendChild(s);
@@ -474,8 +483,7 @@ Blob → 自動下載（.webm / .mp4）
             if (!s.textContent.includes('ytInitialPlayerResponse')) continue;
             const start  = s.textContent.indexOf('ytInitialPlayerResponse');
             const eqIdx  = s.textContent.indexOf('=', start);
-            if (eqIdx === -1) continue;
-            let jsonStart = eqIdx + 1;
+            if (eqIdx === -1) continue;let jsonStart = eqIdx + 1;
             while (jsonStart < s.textContent.length && /\s/.test(s.textContent[jsonStart])) jsonStart++;
             if (s.textContent[jsonStart] !== '{') continue;
             const json = extractJSON(s.textContent, jsonStart);
@@ -715,7 +723,7 @@ Blob → 自動下載（.webm / .mp4）
       return;
     }
 
-    await loadScript(JSPDF_URL);
+    await loadScript(JSPDF_URL, JSPDF_SRI);
     const { jsPDF } = window.jspdf;
     console.log('📄 Found ' + blobImgs.length + ' pages — SCALE:' + SCALE + ' QUALITY:' + QUALITY);
 

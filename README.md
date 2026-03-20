@@ -246,7 +246,7 @@ Blob → 自動下載（.webm / .mp4）
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.10
+// GDrive Universal Downloader v2.11
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
 //           Images, Video (MediaRecorder capture), Audio, and more
 //
@@ -261,7 +261,7 @@ Blob → 自動下載（.webm / .mp4）
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.10 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.11 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
   const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
@@ -649,14 +649,8 @@ Blob → 自動下載（.webm / .mp4）
 
           // Method 2: fallback — open blob in helper tab if the browser blocked auto-download
           const openBlobInTab = () => {
-            const helper = window.open('', '_blank');
-            if (helper && !helper.closed) {
-              helper.document.title = fname;
-              helper.location.href = blobUrl;
-            } else {
-              window.open(blobUrl, '_blank');
-            }
-            console.log('💾 If the new tab shows the video preview, use the browser menu to "Save video".');
+            window.open(blobUrl, '_blank', 'noopener,noreferrer');
+            console.log('💾 A helper tab was opened with the recording. Use the browser menu to "Save video".');
           };
           const fallbackTimer = setTimeout(openBlobInTab, 4000);
 

@@ -246,7 +246,7 @@ Blob → 自動下載（.webm / .mp4）
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.8
+// GDrive Universal Downloader v2.10
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
 //           Images, Video (MediaRecorder capture), Audio, and more
 //
@@ -261,7 +261,7 @@ Blob → 自動下載（.webm / .mp4）
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.8 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.10 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
   const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
@@ -431,6 +431,74 @@ Blob → 自動下載（.webm / .mp4）
     return null;
   };
 
+  const extractBalancedJSON = (text, startIdx) => {
+    let depth = 0, inString = false, escape = false;
+    for (let i = startIdx; i < text.length; i++) {
+      const c = text[i];
+      if (escape)               { escape = false; continue; }
+      if (c === '\\' && inString) { escape = true;  continue; }
+      if (c === '"')            { inString = !inString; continue; }
+      if (inString)             { continue; }
+      if (c === '{')            { depth++; }
+      else if (c === '}')       { depth--; if (depth === 0) return text.substring(startIdx, i + 1); }
+    }
+    return null;
+  };
+
+  const safeParseJSON = (str) => {
+    if (!str) return null;
+    try { return JSON.parse(str); } catch (_) { return null; }
+  };
+
+  const getWatchFlexyPlayerResponse = () => {
+    const flexy = document.querySelector('ytd-watch-flexy');
+    if (!flexy) return null;
+    const direct = flexy.playerResponse || flexy.__data?.playerResponse || flexy?.data?.playerResponse;
+    if (direct) return typeof direct === 'string' ? safeParseJSON(direct) : direct;
+    const attr = flexy.getAttribute?.('player-response');
+    if (attr) return safeParseJSON(attr);
+    return null;
+  };
+
+  const findPlayerResponseInScripts = () => {
+    const scripts = [...document.querySelectorAll('script')];
+    for (const s of scripts) {
+      if (!s.textContent.includes('ytInitialPlayerResponse')) continue;
+      const start  = s.textContent.indexOf('ytInitialPlayerResponse');
+      const eqIdx  = s.textContent.indexOf('=', start);
+      if (eqIdx === -1) continue;
+      let jsonStart = eqIdx + 1;
+      while (jsonStart < s.textContent.length && /\s/.test(s.textContent[jsonStart])) jsonStart++;
+      if (s.textContent[jsonStart] !== '{') continue;
+      const json = extractBalancedJSON(s.textContent, jsonStart);
+      if (!json) continue;
+      const parsed = safeParseJSON(json);
+      if (parsed) return parsed;
+    }
+    return null;
+  };
+
+  const tryGetYTPlayerResponse = () => {
+    return window.ytInitialPlayerResponse
+      || window.ytplayer?.config?.args?.raw_player_response
+      || window.__ytplayer_config__?.args?.raw_player_response
+      || window.ytInitialData?.playerResponse
+      || window.__YTPLAYER?.playerResponse
+      || getWatchFlexyPlayerResponse()
+      || findPlayerResponseInScripts();
+  };
+
+  const waitForYTPlayerResponse = async () => {
+    let response = tryGetYTPlayerResponse();
+    if (response?.streamingData) return response;
+    for (let i = 0; i < 15; i++) {
+      await sleep(200);
+      response = tryGetYTPlayerResponse();
+      if (response?.streamingData) return response;
+    }
+    return response || null;
+  };
+
   // Auto-scroll to trigger lazy loading
   const autoScroll = async () => {
     console.log('⏬ Auto-scrolling...');
@@ -489,46 +557,13 @@ Blob → 自動下載（.webm / .mp4）
     if (/youtube\.com\/watch|youtu\.be\//i.test(url)) {
       console.log('📺 YouTube detected — scanning stream URLs...');
 
-      const playerResponse = window.ytInitialPlayerResponse
-        || window.ytplayer?.config?.args?.raw_player_response
-        || (() => {
-          // String-aware JSON extractor — correctly skips { } inside string values
-          const extractJSON = (text, startIdx) => {
-            let depth = 0, inString = false, escape = false;
-            for (let i = startIdx; i < text.length; i++) {
-              const c = text[i];
-              if (escape)               { escape = false; continue; }
-              if (c === '\\' && inString) { escape = true;  continue; }
-              if (c === '"')            { inString = !inString; continue; }
-              if (inString)             { continue; }
-              if (c === '{')            { depth++; }
-              else if (c === '}')       { depth--; if (depth === 0) return text.substring(startIdx, i + 1); }
-            }
-            return null;
-          };
-
-          const scripts = [...document.querySelectorAll('script')];
-          for (const s of scripts) {
-            if (!s.textContent.includes('ytInitialPlayerResponse')) continue;
-            const start  = s.textContent.indexOf('ytInitialPlayerResponse');
-            const eqIdx  = s.textContent.indexOf('=', start);
-            if (eqIdx === -1) continue;let jsonStart = eqIdx + 1;
-            while (jsonStart < s.textContent.length && /\s/.test(s.textContent[jsonStart])) jsonStart++;
-            if (s.textContent[jsonStart] !== '{') continue;
-            const json = extractJSON(s.textContent, jsonStart);
-            if (!json) continue;
-            try { return JSON.parse(json); } catch (_) { continue; }
-          }
-          return null;
-        })();
+      const playerResponse = await waitForYTPlayerResponse();
+      const formats         = playerResponse?.streamingData?.formats         || [];
+      const adaptiveFormats = playerResponse?.streamingData?.adaptiveFormats || [];
 
       if (!playerResponse?.streamingData) {
-        console.error('❌ Cannot find ytInitialPlayerResponse. Try refreshing the page and running the script again.');
-        return;
+        console.warn('⚠️ Could not read ytInitialPlayerResponse. Continuing with MediaRecorder fallback only.');
       }
-
-      const formats         = playerResponse.streamingData.formats         || [];
-      const adaptiveFormats = playerResponse.streamingData.adaptiveFormats || [];
 
       // Muxed streams (video + audio combined) — for reference only
       const muxed = formats
@@ -583,28 +618,62 @@ Blob → 自動下載（.webm / .mp4）
           const blobUrl = URL.createObjectURL(blob);
           const fname   = sanitizeFilename(title + '.webm');
 
-          // Method 1: <a> click
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = fname;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+          const triggerBlobDownload = () => {
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = fname;
+            link.style.display = 'none';
+            link.target = '_blank';
+            link.rel = 'noopener';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          };
 
-          // Method 2: fallback — only open blob in new tab if download likely failed
-          const checkFallback = setTimeout(() => {
-            window.open(blobUrl, '_blank');
-            console.log('💾 If download did not start automatically, save the file from the new tab (Ctrl+S / Cmd+S)');
-          }, 3000);
+          triggerBlobDownload();
 
-          // Listen for download start to cancel fallback
-          window.addEventListener('beforeunload', () => clearTimeout(checkFallback), { once: true });
+          const manualDownload = () => {
+            if (!window.__gdrive_lastRecording || window.__gdrive_lastRecording.url !== blobUrl) {
+              console.warn('⚠️ No recording available to download.');
+              return;
+            }
+            triggerBlobDownload();
+          };
 
-          // Revoke blob URL after 5 minutes to free memory
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 300000);
+          window.__gdrive_lastRecording = { blob, url: blobUrl, filename: fname };
+          Object.defineProperty(window, '__gdrive_downloadRecording', {
+            value: manualDownload,
+            configurable: true,
+            writable: false,
+          });
+
+          // Method 2: fallback — open blob in helper tab if the browser blocked auto-download
+          const openBlobInTab = () => {
+            const helper = window.open('', '_blank');
+            if (helper && !helper.closed) {
+              helper.document.title = fname;
+              helper.location.href = blobUrl;
+            } else {
+              window.open(blobUrl, '_blank');
+            }
+            console.log('💾 If the new tab shows the video preview, use the browser menu to "Save video".');
+          };
+          const fallbackTimer = setTimeout(openBlobInTab, 4000);
+
+          const cancelFallback = () => clearTimeout(fallbackTimer);
+          window.addEventListener('beforeunload', cancelFallback, { once: true });
+
+          const revokeTimer = setTimeout(() => {
+            if (window.__gdrive_lastRecording?.url === blobUrl) {
+              delete window.__gdrive_downloadRecording;
+              delete window.__gdrive_lastRecording;
+            }
+            URL.revokeObjectURL(blobUrl);
+          }, 600000);
+
           console.log('✅ Recording complete: ' + fname + ' (' + mb + ' MB)');
-          console.log('   Download should start automatically. If not, a new tab will open — press Cmd+S to save.');
+          console.log('   Download should start automatically. If not, run  __gdrive_downloadRecording()  or wait for the helper tab.');
+          console.log('   Keep this tab open until the browser finishes saving the file.');
         }, 300);
       };
 

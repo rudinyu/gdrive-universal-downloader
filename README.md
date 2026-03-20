@@ -246,7 +246,7 @@ Blob → 自動下載（.webm / .mp4）
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.6
+// GDrive Universal Downloader v2.7
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
 //           Images, Video (MediaRecorder capture), Audio, and more
 //
@@ -261,7 +261,7 @@ Blob → 自動下載（.webm / .mp4）
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.6 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.7 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
   const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
@@ -282,26 +282,28 @@ Blob → 自動下載（.webm / .mp4）
   const isVideoURL = (url) => VIDEO_PATTERNS.some(p => p.test(url));
 
   // ── Video Stream Interceptor (Google Drive only) ────────────────
-  // Skip hooks on YouTube — we use ytInitialPlayerResponse instead
   const capturedVideoURLs = new Set();
-  let _origXHR, _origFetch;
+  let _origXHR = null;
+  let _origFetch = null;
 
-  if (!/youtube\.com|youtu\.be/i.test(window.location.href)) {
-    const recordURL = (url) => {
-      if (!url || typeof url !== 'string') return;
-      if (isVideoURL(url) && !capturedVideoURLs.has(url)) {
-        capturedVideoURLs.add(url);
-        console.log('🎯 Captured video URL: ' + url.substring(0, 80) + '...');
-      }
-    };
+  const recordVideoURL = (url) => {
+    if (!url || typeof url !== 'string') return;
+    if (isVideoURL(url) && !capturedVideoURLs.has(url)) {
+      capturedVideoURLs.add(url);
+      console.log('🎯 Captured video URL: ' + url.substring(0, 80) + '...');
+    }
+  };
 
-    _origXHR = window.XMLHttpRequest;
-    const OrigXHR = _origXHR;
+  const installDriveVideoHooks = () => {
+    if (_origXHR || _origFetch) return;
+
+    const OrigXHR = window.XMLHttpRequest;
+    _origXHR = OrigXHR;
     function HookedXHR() {
       const xhr = new OrigXHR();
       const origOpen = xhr.open.bind(xhr);
       xhr.open = function (method, url, ...args) {
-        recordURL(url);
+        recordVideoURL(url);
         return origOpen(method, url, ...args);
       };
       return xhr;
@@ -315,14 +317,12 @@ Blob → 自動下載（.webm / .mp4）
     _origFetch = window.fetch;
     window.fetch = function (input, ...args) {
       const url = typeof input === 'string' ? input : input?.url;
-      recordURL(url);
+      recordVideoURL(url);
       return _origFetch.apply(this, [input, ...args]);
     };
 
     console.log('🪝 XHR/fetch hooks installed for Drive video detection');
-  } else {
-    console.log('📺 YouTube page — skipping XHR hooks, using ytInitialPlayerResponse instead');
-  }
+  };
 
   const restoreHooks = () => {
     if (_origXHR)   { window.XMLHttpRequest = _origXHR; _origXHR = null; }
@@ -442,7 +442,7 @@ Blob → 自動下載（.webm / .mp4）
       'img.stretch-fit, #drive-viewer-main-content img, .drive-viewer-content img'
     ))                                    return 'image';
     if (document.querySelector(
-      '.drive-viewer-text-container, .docs-texteventtarget-iframe, pre'
+      '.drive-viewer-text-container, pre, iframe.docs-texteventtarget-iframe, .docs-texteventtarget-iframe'
     ))                                    return 'text';
     if (/drive\.google\.com\/file\/d\//i.test(url)) return 'file-export';
 
@@ -616,6 +616,8 @@ Blob → 自動下載（.webm / .mp4）
 
       return;
     }
+    capturedVideoURLs.clear();
+    installDriveVideoHooks();
     const videoEl = document.querySelector('video');
     const domSrc  = videoEl?.src
       || videoEl?.querySelector('source[src]')?.src
@@ -730,8 +732,10 @@ Blob → 自動下載（.webm / .mp4）
     let pdf = null;
     for (let i = 0; i < blobImgs.length; i++) {
       const img = blobImgs[i];
-      const w   = Math.round(img.width  * SCALE);
-      const h   = Math.round(img.height * SCALE);
+      const sourceWidth  = img.naturalWidth  || img.width;
+      const sourceHeight = img.naturalHeight || img.height;
+      const w   = Math.round(sourceWidth  * SCALE);
+      const h   = Math.round(sourceHeight * SCALE);
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -758,6 +762,13 @@ Blob → 自動下載（.webm / .mp4）
   const title = getTitle();
   const ext   = getTitleExt();
   const getId = () => url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+  const getFormExportPath = () => {
+    const newForm = url.match(/\/forms\/d\/e\/([^/]+)/);
+    if (newForm) return 'd/e/' + newForm[1];
+    const legacyForm = url.match(/\/forms\/d\/([^/]+)/);
+    if (legacyForm) return 'd/' + legacyForm[1];
+    return null;
+  };
 
   console.log('🔍 Detected: ' + type + ' | File: ' + title);
 
@@ -783,8 +794,8 @@ Blob → 自動下載（.webm / .mp4）
   }
 
   if (type === 'gforms') {
-    const id = getId(); if (!id) { console.error('Cannot get form ID'); return; }
-    triggerDownload('https://docs.google.com/forms/d/' + id + '/export?format=csv', title + '.csv');
+    const formPath = getFormExportPath(); if (!formPath) { console.error('Cannot get form ID'); return; }
+    triggerDownload('https://docs.google.com/forms/' + formPath + '/export?format=csv', title + '.csv');
     console.log('📋 Downloading → ' + title + '.csv'); return;
   }
 
@@ -814,9 +825,23 @@ Blob → 自動下載（.webm / .mp4）
   }
 
   if (type === 'text') {
-    const el      = document.querySelector('.drive-viewer-text-container, pre');
-    const content = el?.innerText ?? document.body.innerText;
-    const blob    = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const el       = document.querySelector('.drive-viewer-text-container, pre');
+    let content    = el?.innerText?.trim();
+    if (!content) {
+      const iframe = document.querySelector('iframe.docs-texteventtarget-iframe')
+        || document.querySelector('.docs-texteventtarget-iframe iframe');
+      if (iframe) {
+        try {
+          content = iframe.contentDocument?.body?.innerText?.trim();
+        } catch (err) {
+          console.warn('⚠️ Cannot read iframe contents:', err.message);
+        }
+      }
+    }
+    if (!content) {
+      content = document.body.innerText || '';
+    }
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     triggerDownload(URL.createObjectURL(blob), title + '.' + (ext || 'txt'));
     console.log('📋 Downloading → ' + title + '.' + (ext || 'txt')); return;
   }

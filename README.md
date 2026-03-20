@@ -246,7 +246,7 @@ Blob → 自動下載（.webm / .mp4）
 
 ```javascript
 // ================================================================
-// GDrive Universal Downloader v2.7
+// GDrive Universal Downloader v2.8
 // Supports: View-Only PDF, Docs, Sheets, Slides, Forms, Drawings,
 //           Images, Video (MediaRecorder capture), Audio, and more
 //
@@ -261,7 +261,7 @@ Blob → 自動下載（.webm / .mp4）
 // ================================================================
 
 (function () {
-  console.log('🚀 GDrive Universal Downloader v2.7 starting...');
+  console.log('🚀 GDrive Universal Downloader v2.8 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
   const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
@@ -401,6 +401,35 @@ Blob → 自動下載（.webm / .mp4）
     s.onerror = () => reject(new Error('Failed to load: ' + src));
     document.body.appendChild(s);
   });
+
+  const getVideoTitleFromURL = (url) => {
+    const match = url?.match(/[?&]title=([^&]+)/i);
+    if (!match) return null;
+    try {
+      const decoded = decodeURIComponent(match[1].replace(/\+/g, ' '));
+      const clean   = decoded.replace(/\.\w{2,5}$/, '').trim();
+      return sanitizeFilename(clean) || null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const getVideoExtFromURL = (url) => {
+    if (!url) return null;
+    const extMatch = url.match(/\.(mp4|m4v|mov|webm|mkv|avi|3gp)/i);
+    if (extMatch) return extMatch[1].toLowerCase();
+    const mimeMatch = url.match(/mime=video\/([^&]+)/i);
+    if (mimeMatch) {
+      const mime = decodeURIComponent(mimeMatch[1]).toLowerCase();
+      if (mime.includes('webm')) return 'webm';
+      if (mime.includes('3gpp')) return '3gp';
+      if (mime.includes('mov'))  return 'mov';
+      if (mime.includes('m4v'))  return 'm4v';
+      if (mime.includes('avi'))  return 'avi';
+      return 'mp4';
+    }
+    return null;
+  };
 
   // Auto-scroll to trigger lazy loading
   const autoScroll = async () => {
@@ -625,9 +654,11 @@ Blob → 自動下載（.webm / .mp4）
 
     if (domSrc && !domSrc.startsWith('blob:')) {
       console.log('✅ Found direct video URL in DOM');
-      const ext = domSrc.match(/\.(mp4|webm|mov)/i)?.[1] || 'mp4';
-      triggerDownload(domSrc, title + '.' + ext);
-      console.log('🎬 Downloading → ' + title + '.' + ext);
+      const ext      = getVideoExtFromURL(domSrc) || 'mp4';
+      const baseName = getVideoTitleFromURL(domSrc) || title;
+      const fname    = baseName + '.' + ext;
+      triggerDownload(domSrc, fname);
+      console.log('🎬 Downloading → ' + fname);
       restoreHooks();
       return;
     }
@@ -683,9 +714,12 @@ Blob → 自動下載（.webm / .mp4）
     // NOTE: videoplayback / googlevideo URLs are segmented — one segment = broken file
     if (directMp4.length > 0) {
       const best = directMp4.sort((a, b) => b.length - a.length)[0];
-      console.log('✅ Direct MP4 found — downloading...');
-      triggerDownload(best, title + '.mp4');
-      console.log('🎬 Downloading → ' + title + '.mp4');
+      const ext  = getVideoExtFromURL(best) || 'mp4';
+      const baseName = getVideoTitleFromURL(best) || title;
+      const fname = baseName + '.' + ext;
+      console.log('✅ Direct video stream found — downloading...');
+      triggerDownload(best, fname);
+      console.log('🎬 Downloading → ' + fname);
       restoreHooks();
       return;
     }

@@ -90,17 +90,20 @@ Blob → auto-download (.webm / .mp4)
 | `SCALE` | `1.5` | 1.5× screen size |
 | `SCALE` | `2.0` | Full retina resolution |
 | `QUALITY` | `0.95` | Near-lossless JPEG |
-| `QUALITY` | `0.82` | Balanced ← default |
+| `QUALITY` | `0.78` | Balanced ← default |
 | `QUALITY` | `0.70` | Smaller file |
+| `MAX_PAGE_DIMENSION` | `2200` | Auto-downscale retina captures ← default |
 
 #### Recommended Combinations
 
 | Goal | Browser Zoom | SCALE | QUALITY |
 |------|-------------|-------|---------|
 | Smallest file | 75% | 1.0 | 0.70 |
-| Balanced (default) | 100% | 1.0 | 0.82 |
+| Balanced (default) | 100% | 1.0 | 0.78 |
 | High quality | 150% | 1.0 | 0.90 |
 | Maximum quality | 150% | 1.5 | 0.95 |
+
+> 💡 `MAX_PAGE_DIMENSION` (default `2200`) automatically downsizes super-high-res captures to keep file sizes reasonable. Increase it for sharper output or set it to `Infinity` to disable.
 
 ### Limitations
 
@@ -209,17 +212,20 @@ Blob → 自動下載（.webm / .mp4）
 | `SCALE` | `1.5` | 1.5 倍螢幕尺寸 |
 | `SCALE` | `2.0` | 完整 retina 解析度 |
 | `QUALITY` | `0.95` | 接近無損 JPEG |
-| `QUALITY` | `0.82` | 平衡 ← 預設 |
+| `QUALITY` | `0.78` | 平衡 ← 預設 |
 | `QUALITY` | `0.70` | 較小檔案 |
+| `MAX_PAGE_DIMENSION` | `2200` | 自動壓下高 DPI 圖片 ← 預設 |
 
 #### 推薦組合
 
 | 目標 | 瀏覽器縮放 | SCALE | QUALITY |
 |------|-----------|-------|---------|
 | 最小檔案 | 75% | 1.0 | 0.70 |
-| 平衡（預設） | 100% | 1.0 | 0.82 |
+| 平衡（預設） | 100% | 1.0 | 0.78 |
 | 高品質 | 150% | 1.0 | 0.90 |
 | 最高品質 | 150% | 1.5 | 0.95 |
+
+> 💡 `MAX_PAGE_DIMENSION`（預設 `2200`）會自動壓縮超高解析度的截圖以避免檔案暴增。想要更銳利就提高數值，或設 `Infinity` 完全停用。
 
 ### 限制
 
@@ -264,11 +270,12 @@ Blob → 自動下載（.webm / .mp4）
   console.log('🚀 GDrive Universal Downloader v2.11 starting...');
 
   // ── Settings ────────────────────────────────────────────────────
-  const SCALE        = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
-  const QUALITY      = 0.82;  // PDF JPEG quality (0.0~1.0)
-  const SCROLL_DELAY = 200;   // ms between scroll steps
-  const JSPDF_URL    = 'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js';
-  const JSPDF_SRI    = 'sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/';
+  const SCALE              = 1.0;   // PDF capture scale (1.0 = screen size, recommended)
+  const QUALITY            = 0.78;  // PDF JPEG quality (0.0~1.0)
+  const MAX_PAGE_DIMENSION = 2200;  // px cap after SCALE (Infinity to disable)
+  const SCROLL_DELAY       = 200;   // ms between scroll steps
+  const JSPDF_URL          = 'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js';
+  const JSPDF_SRI          = 'sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/';
 
   // ── Video URL detection (shared across interceptor + processVideo) ──
   const VIDEO_PATTERNS = [
@@ -401,6 +408,25 @@ Blob → 自動下載（.webm / .mp4）
     s.onerror = () => reject(new Error('Failed to load: ' + src));
     document.body.appendChild(s);
   });
+
+  const scalePageDimensions = (width, height) => {
+    const baseW = width * SCALE;
+    const baseH = height * SCALE;
+    const maxDim = Math.max(baseW, baseH);
+    if (!Number.isFinite(MAX_PAGE_DIMENSION) || MAX_PAGE_DIMENSION <= 0 || maxDim <= MAX_PAGE_DIMENSION) {
+      return {
+        w: Math.round(baseW),
+        h: Math.round(baseH),
+        downsampled: false,
+      };
+    }
+    const factor = MAX_PAGE_DIMENSION / maxDim;
+    return {
+      w: Math.round(baseW * factor),
+      h: Math.round(baseH * factor),
+      downsampled: true,
+    };
+  };
 
   const getVideoTitleFromURL = (url) => {
     const match = url?.match(/[?&]title=([^&]+)/i);
@@ -824,15 +850,20 @@ Blob → 自動下載（.webm / .mp4）
 
     await loadScript(JSPDF_URL, JSPDF_SRI);
     const { jsPDF } = window.jspdf;
-    console.log('📄 Found ' + blobImgs.length + ' pages — SCALE:' + SCALE + ' QUALITY:' + QUALITY);
+    const limitInfo =
+      Number.isFinite(MAX_PAGE_DIMENSION) && MAX_PAGE_DIMENSION > 0
+        ? ' MAX:' + MAX_PAGE_DIMENSION + 'px'
+        : '';
+    console.log('📄 Found ' + blobImgs.length + ' pages — SCALE:' + SCALE + ' QUALITY:' + QUALITY + limitInfo);
 
     let pdf = null;
+    let downsampledPages = 0;
     for (let i = 0; i < blobImgs.length; i++) {
       const img = blobImgs[i];
       const sourceWidth  = img.naturalWidth  || img.width;
       const sourceHeight = img.naturalHeight || img.height;
-      const w   = Math.round(sourceWidth  * SCALE);
-      const h   = Math.round(sourceHeight * SCALE);
+      const { w, h, downsampled } = scalePageDimensions(sourceWidth, sourceHeight);
+      if (downsampled) downsampledPages++;
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -846,6 +877,9 @@ Blob → 自動下載（.webm / .mp4）
       pdf.addImage(imgData, 'JPEG', 0, 0, w, h, '', 'FAST');
       console.log('  🖼️ Page ' + (i + 1) + '/' + blobImgs.length
         + ' (' + Math.floor((i + 1) / blobImgs.length * 100) + '%)');
+    }
+    if (downsampledPages > 0) {
+      console.log('ℹ️ Auto-downscaled ' + downsampledPages + ' page(s) to max ' + MAX_PAGE_DIMENSION + 'px');
     }
 
     const filename = getTitle() + '.pdf';
